@@ -654,7 +654,7 @@ brain.inject_event(
 )
 ```
 
-<!-- ## Contributing
+## Contributing
 
 We welcome contributions to the Virtual Brain Engine! Please follow these guidelines:
 
@@ -662,69 +662,115 @@ We welcome contributions to the Virtual Brain Engine! Please follow these guidel
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Install development dependencies:
-```bash
-pip install -r requirements.txt
-pip install black flake8 mypy  # Development tools
+## 📄 License
+
+This project is licensed under the **Gabrial Deora Source Code License (GDSCL) v1.0** - see the [LICENSE](LICENSE) file for the full text.
+
+### 🎯 License Overview
+
+```python
+GABRIAL DEORA SOURCE CODE LICENSE (GDSCL) v1.0
+Copyright (c) 2026 Gabrial Deora. All rights reserved.
+
+1. Ownership
+   All source code, files, assets, and documentation contained in this repository (the "Software") are the exclusive intellectual property of the Author.
+
+2. Viewing Permission
+   Permission is granted to any person to view and read the Software for educational and reference purposes only.
+
+3. Use by Permission Only
+   No individual or organization is allowed to use the Software, in whole or in part, in any project, product, assignment, service, research, or commercial activity without obtaining prior written permission from the Author.
+
+4. Prohibited Actions (Without Permission)
+   The following actions are strictly prohibited unless the Author has granted written consent:
+
+• Copying or reusing the code
+• Modifying or creating derivative works
+• Uploading to another repository
+• Redistributing the Software
+• Deploying the project publicly or privately
+• Using the architecture, logic, database schema, or API design in another project
+• Commercial use or monetization
+
+5. Requesting Permission
+   Anyone wishing to use the Software must first obtain explicit written approval from the Author.
+
+6. No Implied License
+   Access to this repository does not grant any ownership or usage rights.
+
+7. Violation
+   Unauthorized use of the Software constitutes copyright infringement and may result in legal action, including takedown requests and account reporting.
+
+8. Disclaimer
+   The Software is provided "as is", without warranty of any kind, express or implied.
 ```
-4. Make your changes following the existing code style
-5. Add tests for new functionality
-6. Ensure all tests pass:
-```bash
-pytest tests/
-black --check .
-flake8 .
-```
-7. Submit a pull request with a clear description
 
-### Code Style
-- Use Black for code formatting
-- Follow PEP 8 guidelines
-- Add type hints where appropriate
-- Include docstrings for all public functions and classes
+### ✅ What You Can Do
 
-### Testing
-- Write unit tests for new features
-- Ensure test coverage remains above 80%
-- Test both deterministic and stochastic modes -->
+- **👁️ View & Read**: View and read the source code for educational and reference purposes
+- **📚 Learn**: Study the architecture and implementation for learning purposes
+- **🔍 Reference**: Use as a reference for understanding similar concepts
 
-## License
+### 🚫 What Requires Permission
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+- **📋 Copying**: Copying or reusing any part of the code
+- **🔧 Modification**: Modifying or creating derivative works
+- **📤 Redistribution**: Uploading to another repository or redistributing
+- **🚀 Deployment**: Deploying the project publicly or privately
+- **🏗️ Architecture Use**: Using the architecture, logic, database schema, or API design
+- **💰 Commercial Use**: Any commercial use or monetization
+- **🔬 Research**: Using in research projects without permission
+- **📦 Integration**: Using in any project, product, or service
 
-Copyright (c) 2026 Gabrial Deora
+### 📧 Requesting Permission
 
-### License Summary
+To request permission to use this software, please:
+- 📧 Contact the Author directly for written approval
+- 📋 Provide detailed information about intended use
+- 🎯 Specify the scope and nature of your project
+- ⏳ Allow reasonable time for permission review
 
-- ✅ **Commercial use**: You can use this software in commercial products
-- ✅ **Distribution**: You can distribute and redistribute the software
-- ✅ **Modification**: You can modify and create derivative works
-- ✅ **Private use**: You can use the software privately without restriction
-- ⚠️ **Liability**: The software is provided "as is" without warranty
-- ⚠️ **Attribution**: Must include copyright notice and license in copies
+### ⚠️ Important Notes
 
-### Third-Party Dependencies
+- **No Implied Rights**: Repository access does not grant usage rights
+- **Legal Protection**: Unauthorized use constitutes copyright infringement
+- **Enforcement**: Violations may result in legal action and takedown requests
+- **All Rights Reserved**: Author maintains exclusive intellectual property rights
 
-This project uses open-source packages with their respective licenses:
+### 📦 Third-Party Dependencies
 
-- **PyYAML** (MIT License)
-- **NumPy** (BSD License)
-- **SciPy** (BSD License)
-- **OpenCV** (Apache License 2.0)
-- **Pillow** (HPND License)
-- **pyttsx3** (GPL v3)
-- **sounddevice** (MIT License)
-- **soundfile** (BSD License)
-- **ollama** (Apache License 2.0)
-- **pandas** (BSD License)
-- **matplotlib** (PSF License)
-- **pytest** (MIT License)
+This project incorporates open-source packages with their respective licenses:
 
-See [requirements.txt](requirements.txt) for complete dependency list with versions.
+| Package | Version | License | Type |
+|---------|---------|---------|------|
+| **PyYAML** | ≥6.0 | MIT License | Core Dependencies |
+| **NumPy** | ≥1.21.0 | BSD License | Core Dependencies |
+| **SciPy** | ≥1.7.0 | BSD License | Core Dependencies |
+| **OpenCV** | ≥4.9.0 | Apache License 2.0 | Computer Vision |
+| **Pillow** | ≥8.0.0 | HPND License | Image Processing |
+| **pyttsx3** | ≥2.90 | GPL v3 | Audio Processing |
+| **sounddevice** | ≥0.4.0 | MIT License | Audio Processing |
+| **soundfile** | ≥0.10.0 | BSD License | Audio Processing |
+| **ollama** | ≥0.1.0 | Apache License 2.0 | AI & ML |
+| **pandas** | ≥1.3.0 | BSD License | Data Processing |
+| **matplotlib** | ≥3.5.0 | PSF License | Data Visualization |
+| **pytest** | ≥6.0.0 | MIT License | Development & Testing |
 
-## Acknowledgments
+**Note**: Third-party dependencies are subject to their respective licenses as listed above. The GDSCL license applies only to the Virtual Brain Engine codebase.
 
-This project draws inspiration from neuroscience research, cognitive psychology, and computational modeling of brain function.
+### 🔍 License Type
+
+The **Gabrial Deora Source Code License (GDSCL) v1.0** is a **proprietary, source-available license** that:
+
+- 🔒 **Restricts usage** without explicit permission
+- 👁️ **Allows viewing** for educational purposes
+- 📋 **Requires written consent** for any use
+- 🛡️ **Protects intellectual property** rights
+- ⚖️ **Enforces copyright** protection
+
+---
+
+**⚠️ Important**: This is a proprietary license. Do not use this software in any project without first obtaining written permission from the Author.
 
 ## Future Development
 
