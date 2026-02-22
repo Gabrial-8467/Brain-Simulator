@@ -1,34 +1,59 @@
-GABRIAL DEORA SOURCE CODE LICENSE (GDSCL) v1.0
-Copyright (c) 2026 Gabrial Deora. All rights reserved.
+BRAIN-SIMULATOR RESEARCH ATTRIBUTION LICENSE (BSRAL) v1.0
 
-1. Ownership
-   All source code, files, assets, and documentation contained in this repository (the "Software") are the exclusive intellectual property of the Author.
+Copyright (c) 2026 Gabrial Deora
+All Rights Reserved.
 
-2. Viewing Permission
-   Permission is granted to any person to view and read the Software for educational and reference purposes only.
+1. OVERVIEW
+   The Brain-Simulator project is released as a research and educational work.
+   This is NOT open-source software and commercial rights are not granted.
+   Use is permitted for research and academic purposes only, subject to attribution.
 
-3. Use by Permission Only
-   No individual or organization is allowed to use the Software, in whole or in part, in any project, product, assignment, service, research, or commercial activity without obtaining prior written permission from the Author.
+2. PERMITTED USE
+   You may:
 
-4. Prohibited Actions (Without Permission)
-   The following actions are strictly prohibited unless the Author has granted written consent:
+• View and study the source code
+• Run and experiment with the software
+• Fork the repository for personal or academic research
+• Modify the code for non-commercial research
+• Publish research papers, reports, or demonstrations using the software
 
-• Copying or reusing the code
-• Modifying or creating derivative works
-• Uploading to another repository
-• Redistributing the Software
-• Deploying the project publicly or privately
-• Using the architecture, logic, database schema, or API design in another project
-• Commercial use or monetization
+3. REQUIRED ATTRIBUTION
+   Any use of this Software in research, publications, presentations, videos, articles,
+   projects, or demonstrations MUST include clear credit to the Author:
 
-5. Requesting Permission
-   Anyone wishing to use the Software must first obtain explicit written approval from the Author.
+"Gabrial Deora — Brain-Simulator Project (2026)"
 
-6. No Implied License
-   Access to this repository does not grant any ownership or usage rights.
+and a link to the original repository:
+https://github.com/Gabrial-8467/Brain-Simulator
 
-7. Violation
-   Unauthorized use of the Software constitutes copyright infringement and may result in legal action, including takedown requests and account reporting.
+Failure to provide attribution automatically terminates this license.
 
-8. Disclaimer
-   The Software is provided "as is", without warranty of any kind, express or implied.
+4. NON-COMMERCIAL USE ONLY
+   You may NOT:
+
+• Sell the Software
+• Use it in a paid application, SaaS, or API
+• Integrate it into a commercial AI assistant or product
+• Offer services based on the Software
+• Use it inside a company product or internal commercial tool
+
+Commercial licensing requires written permission from the Author.
+
+5. DERIVATIVE PROJECTS
+   Derivative research projects are allowed only if attribution is provided.
+   Redistribution of modified source code must retain this license and credit.
+
+6. REDISTRIBUTION
+   The Software may not be repackaged or redistributed as a standalone product.
+
+7. NO WARRANTY
+   The Software is provided "AS IS", without warranty of any kind.
+
+8. TERMINATION
+   If any term of this license is violated, all rights granted under this license immediately end.
+
+9. ACCEPTANCE
+   By accessing, cloning, or using this repository, you agree to these terms.
+
+Contact for permissions:
+[gabrialdeora003@gmail.com](mailto:gabrialdeora003@gmail.com)
