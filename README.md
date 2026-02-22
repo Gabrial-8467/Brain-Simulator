@@ -1,4 +1,8 @@
-# Virtual Brain Engine
+## Virtual Brain Engine
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Code style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 A sophisticated cognitive simulation framework that models the complex interactions between neurochemical dynamics, memory systems, decision-making processes, and developmental psychology. This project creates a virtual brain that can learn, adapt, and respond to stimuli in a biologically-inspired manner.
 
@@ -28,12 +32,30 @@ The Virtual Brain Engine simulates the intricate balance of neurochemicals that 
 - **Scenario Testing**: Built-in structured learning scenarios and stress testing capabilities
 - **Live Mode**: Interactive mode for real-time brain state exploration and manual stimulation
 
+## System Requirements
+
+- **Python**: 3.8 or higher
+- **Operating System**: Windows, macOS, or Linux
+- **Memory**: Minimum 4GB RAM (8GB recommended)
+- **Storage**: 500MB free space
+- **Camera**: Optional, for visual perception features
+- **Microphone**: Optional, for audio perception features
+
 ## Installation
+
+### Prerequisites
+
+Ensure you have Python 3.8+ installed. Check with:
+```bash
+python --version
+```
+
+### Quick Install
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd BRAIN
+git clone https://github.com/Gabrial-8467/Brain-Simulator.git
+cd Brain-Simulator
 ```
 
 2. Create and activate virtual environment:
@@ -46,6 +68,45 @@ source myenv/bin/activate  # On Windows: myenv\Scripts\activate
 ```bash
 pip install -r requirements.txt
 ```
+
+### Troubleshooting
+
+#### Common Issues
+
+1. **Camera Access Issues** (Windows):
+   ```bash
+   # Install OpenCV with additional dependencies
+   pip install opencv-python --upgrade
+   pip install opencv-contrib-python
+   ```
+
+2. **Audio Issues** (macOS/Linux):
+   ```bash
+   # Install additional audio dependencies
+   pip install pyaudio
+   ```
+
+3. **Virtual Environment Issues**:
+   ```bash
+   # Remove and recreate venv
+   rm -rf myenv
+   python -m venv myenv
+   source myenv/bin/activate  # Windows: myenv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+
+4. **Permission Issues** (Linux/macOS):
+   ```bash
+   # Fix camera/microphone permissions
+   sudo usermod -a -G video $USER
+   sudo usermod -a -G audio $USER
+   ```
+
+#### Getting Help
+
+- 📖 Check the [Issues](https://github.com/Gabrial-8467/Brain-Simulator/issues) page
+- 🐛 Report bugs with detailed error messages
+- 💡 Feature requests are welcome!
 
 ## Quick Start
 
@@ -90,7 +151,7 @@ The system is configured through YAML files in the `config/` directory:
 - `decision.yaml`: Decision engine configuration with actions and feedback mappings
 - `engine.yaml`: Core simulation engine settings and update orders
 
-## Architecture
+<!-- ## Architecture
 
 ```
 BRAIN/
@@ -162,9 +223,9 @@ BRAIN/
 │   └── helpers.py         # Helper functions
 │
 └── myenv/                 # Virtual environment
-```
+``` -->
 
-## Core Components
+<!-- ## Core Components
 
 ### VirtualBrain Class
 
@@ -230,10 +291,9 @@ Models four key neurochemicals with realistic interactions:
 - **Regret Calculation**: Computes regret from unchosen alternatives
 - **Wisdom Accumulation**: Long-term learning from counterfactual thinking
 - **Profile Blending**: Combines predicted outcomes with similar historical patterns
-- **Maturity Development**: Gradual growth from reflective experiences
+- **Maturity Development**: Gradual growth from reflective experiences -->
 
 ## Configuration
-
 
 ### Chemical Configuration
 
@@ -356,7 +416,7 @@ The strategic planner uses configurable parameters for future simulation:
 - `GoalSystem`: Goal formation, pursuit, and achievement tracking
 - `AssociativeMemory`: Long-term memory with human-like decay patterns
 
-### Key Methods
+<!-- ### Key Methods
 
 ```python
 # Brain tick - advance simulation by one cycle
@@ -555,7 +615,7 @@ if memory:
 recent_events = brain.autobiography.get_recent_events(50)
 brain.narrative_engine.update_narrative(recent_events)
 print(f"Current narrative: {brain.narrative_engine.get_current_narrative()}")
-```
+``` -->
 
 ## Testing
 
@@ -594,17 +654,73 @@ brain.inject_event(
 )
 ```
 
-## Contributing
+<!-- ## Contributing
+
+We welcome contributions to the Virtual Brain Engine! Please follow these guidelines:
+
+### Development Setup
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Submit a pull request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Install development dependencies:
+```bash
+pip install -r requirements.txt
+pip install black flake8 mypy  # Development tools
+```
+4. Make your changes following the existing code style
+5. Add tests for new functionality
+6. Ensure all tests pass:
+```bash
+pytest tests/
+black --check .
+flake8 .
+```
+7. Submit a pull request with a clear description
+
+### Code Style
+- Use Black for code formatting
+- Follow PEP 8 guidelines
+- Add type hints where appropriate
+- Include docstrings for all public functions and classes
+
+### Testing
+- Write unit tests for new features
+- Ensure test coverage remains above 80%
+- Test both deterministic and stochastic modes -->
 
 ## License
 
-[Add your license information here]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+Copyright (c) 2026 Gabrial Deora
+
+### License Summary
+
+- ✅ **Commercial use**: You can use this software in commercial products
+- ✅ **Distribution**: You can distribute and redistribute the software
+- ✅ **Modification**: You can modify and create derivative works
+- ✅ **Private use**: You can use the software privately without restriction
+- ⚠️ **Liability**: The software is provided "as is" without warranty
+- ⚠️ **Attribution**: Must include copyright notice and license in copies
+
+### Third-Party Dependencies
+
+This project uses open-source packages with their respective licenses:
+
+- **PyYAML** (MIT License)
+- **NumPy** (BSD License)
+- **SciPy** (BSD License)
+- **OpenCV** (Apache License 2.0)
+- **Pillow** (HPND License)
+- **pyttsx3** (GPL v3)
+- **sounddevice** (MIT License)
+- **soundfile** (BSD License)
+- **ollama** (Apache License 2.0)
+- **pandas** (BSD License)
+- **matplotlib** (PSF License)
+- **pytest** (MIT License)
+
+See [requirements.txt](requirements.txt) for complete dependency list with versions.
 
 ## Acknowledgments
 
@@ -612,8 +728,41 @@ This project draws inspiration from neuroscience research, cognitive psychology,
 
 ## Future Development
 
-- [ ] GUI interface for real-time visualization
-- [ ] Extended chemical system (more neurotransmitters)
-- [ ] Machine learning integration for pattern recognition
-- [ ] Networked multi-brain simulations
-- [ ] Integration with external data sources
+### Roadmap
+
+- [ ] **GUI Interface**: Real-time visualization dashboard with brain state monitoring
+- [ ] **Extended Chemical System**: Additional neurotransmitters (GABA, norepinephrine, endorphins)
+- [ ] **Machine Learning Integration**: Deep learning for pattern recognition and prediction
+- [ ] **Networked Multi-Brain**: Social interaction simulations between multiple virtual brains
+- [ ] **External Data Integration**: Real-time data feeds from APIs and sensors
+- [ ] **Mobile App**: Cross-platform mobile interface for brain monitoring
+- [ ] **Web Dashboard**: Browser-based interface for remote monitoring
+- [ ] **Advanced Analytics**: Statistical analysis tools for brain behavior patterns
+- [ ] **Export/Import**: Save and load brain states for continuity
+- [ ] **Plugin System**: Extensible architecture for custom modules
+
+### Contributing to Roadmap
+
+We prioritize features based on community feedback. Vote for existing issues or create new ones to help shape the project's future!
+
+---
+
+## 🧠 Acknowledgments
+
+This project draws inspiration from:
+- **Neuroscience Research**: Latest findings in brain chemistry and cognitive function
+- **Cognitive Psychology**: Theories of memory, learning, and decision-making
+- **Computational Modeling**: Advances in brain simulation and artificial intelligence
+- **Open Source Community**: The countless developers who make these tools possible
+
+**Special thanks** to the researchers and developers who have contributed to our understanding of the human brain.
+
+---
+
+<div align="center">
+
+**⭐ Star this repository if you find it interesting!**
+
+Made with ❤️ by [Gabrial Deora](https://github.com/Gabrial-8467)
+
+</div>
