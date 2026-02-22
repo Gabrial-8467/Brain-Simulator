@@ -1,0 +1,42 @@
+decision:
+
+  actions:
+    - support
+    - challenge
+    - suggest
+    - refuse
+    - neutral
+
+  base_probabilities:
+    support: 0.35
+    challenge: 0.25
+    suggest: 0.20
+    refuse: 0.10
+    neutral: 0.10
+
+  chemical_influence:
+    dopamine:
+      support: 0.002
+    cortisol:
+      challenge: 0.003
+
+  action_feedback:
+
+    support:
+      dopamine: 2
+      oxytocin: 1
+
+    challenge:
+      cortisol: 1
+      serotonin: -0.5
+
+    suggest:
+      dopamine: 1
+
+    refuse:
+      cortisol: 2
+
+    neutral:
+      serotonin: 0.5
+
+  feedback_mode: immediate

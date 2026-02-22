@@ -1,0 +1,49 @@
+chemicals:
+
+  dopamine:
+    min: 0
+    max: 100
+    baseline: 50
+    decay: 0.02
+    noise: 0.5
+
+  cortisol:
+    min: 0
+    max: 100
+    baseline: 40
+    decay: 0.02
+    noise: 0.4
+
+  oxytocin:
+    min: 0
+    max: 100
+    baseline: 60
+    decay: 0.015
+    noise: 0.3
+
+  serotonin:
+    min: 0
+    max: 100
+    baseline: 55
+    decay: 0.02
+    noise: 0.4
+
+
+interactions:
+
+  cortisol:
+    dopamine: -0.0008
+
+  serotonin:
+    cortisol: -0.0005
+
+  oxytocin:
+    cortisol: -0.0004
+
+  dopamine:
+    serotonin: 0.0003
+
+
+global_settings:
+  clamp_after_interaction: true
+  clamp_after_noise: true

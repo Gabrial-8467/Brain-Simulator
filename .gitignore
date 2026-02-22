@@ -1,0 +1,153 @@
+ # Virtual Brain Engine .gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+myenv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Configuration files with sensitive data
+config/local_*.yaml
+config/secrets.yaml
+.env
+.env.local
+.env.*.local
+
+# Test files
+test_*.py
+*_test.py
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Documentation build
+docs/_build/
+site/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Machine Learning models
+*.pkl
+*.model
+*.h5
+*.joblib
+
+# Data files
+data/
+datasets/
+*.csv
+*.json
+*.jsonl
+*.parquet
+
+# Brain simulation data
+simulation_results/
+brain_states/
+experiments/
+
+# Audio/Video files (for sensory perception)
+*.wav
+*.mp3
+*.mp4
+*.avi
+*.mov
+
+# Camera/vision data
+camera_feeds/
+vision_data/
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.tiff
+
+# Ollama and AI models
+ollama_models/
+*.gguf
+*.bin
+
+# OpenCV data
+haar_cascades/
+
+# SoundDevice cache
+*.cache
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Performance profiling
+*.prof
+*.profile
+
+# Memory dumps
+*.dmp
+*.core
+
+# Local development
+local/
+dev/
+development/
+
+# Experimental features
+experimental/
+sandbox/
+
+# Generated documentation
+generated_docs/
+auto_generated/
