@@ -1,26 +1,47 @@
+from __future__ import annotations
+
+from core.attention import Thought
+
+from .probability_model import ProbabilityModel
+
+
 class DecisionEngine:
-    def __init__(self, decision_config: dict, deterministic=False):
+    def __init__(self, decision_config: dict, deterministic: bool = False):
         self.model = ProbabilityModel(decision_config)
         self.deterministic = deterministic
         self.action_feedback = decision_config.get("action_feedback", {})
         self.feedback_mode = decision_config.get("feedback_mode", "immediate")
 
-    def decide(self, chemical_state: dict):
-        probabilities = self.model.compute(chemical_state)
+    def decide(self, focus: Thought) -> dict:
+        base = self.model.compute({})
+
+        bias = (focus.emotional_weight * 0.3) + (focus.relevance_to_goals * 0.2)
+        for act in base:
+            base[act] += bias
+
+        total = sum(base.values())
+        if total:
+            for k in base:
+                base[k] /= total
 
         if self.deterministic:
-            action = max(probabilities, key=probabilities.get)
+            action = max(base, key=base.get)
         else:
-            action = self._weighted_random_choice(probabilities)
+            import random
+
+            actions = list(base.keys())
+            probs = list(base.values())
+            action = random.choices(actions, weights=probs, k=1)[0]
 
         return {
             "action": action,
-            "probabilities": probabilities,
-            "feedback": self.action_feedback.get(action, {})
+            "probabilities": base,
+            "feedback": self.action_feedback.get(action, {}),
         }
 
-    def _weighted_random_choice(self, probabilities: dict):
-        import random
-        actions = list(probabilities.keys())
-        weights = list(probabilities.values())
-        return random.choices(actions, weights=weights, k=1)[0]
+    def execute_action(self, action: str, state: dict | None = None) -> dict:
+        return {
+            "action": action,
+            "probabilities": {},
+            "feedback": self.action_feedback.get(action, {}),
+        }

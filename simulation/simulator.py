@@ -1,17 +1,25 @@
 import time
 
+from simulation.environment import SyntheticEnvironment
+
 
 class Simulator:
-    def __init__(self, brain, tick_delay=0.1):
+    def __init__(self, brain, tick_delay=0.1, environment=None):
         self.brain = brain
         self.tick_delay = tick_delay
         self.running = False
+        self.environment = environment or SyntheticEnvironment(
+            deterministic=getattr(brain, "deterministic", False)
+        )
 
     def run_scenario(self, scenario_events, steps=50):
 
         print("\n--- Simulation Start ---\n")
 
         for step in range(steps):
+            # Feed one lived experience into perception each cycle.
+            env_event = self.environment.generate_event()
+            self.brain.perceive(env_event)
 
             # Inject event if available
             if step < len(scenario_events):
