@@ -4,6 +4,7 @@ import sys
 import yaml
 
 from core.brain import VirtualBrain
+from decision.decision_engine import DecisionEngine
 from memory.memory_manager import MemoryManager
 from simulation.simulator import Simulator
 from simulation.scenarios import build_structured_learning_scenario
@@ -50,6 +51,12 @@ def load_chemical_config():
         return yaml.safe_load(f)
 
 
+def load_decision_config():
+    with open("config/decision.yaml", "r") as f:
+        payload = yaml.safe_load(f) or {}
+    return payload.get("decision", payload)
+
+
 # =====================================================
 # MAIN
 # =====================================================
@@ -71,10 +78,16 @@ def main():
             logger.warning("memory_store.json exists but is not a brain state snapshot; starting fresh.")
 
     chemical_configs = load_chemical_config()
+    decision_config = load_decision_config()
+    decision_engine = DecisionEngine(
+        decision_config=decision_config,
+        deterministic=args.deterministic,
+    )
 
     brain = VirtualBrain(
         chemical_configs=chemical_configs["chemicals"],
         interaction_matrix=chemical_configs.get("interactions"),
+        decision_engine=decision_engine,
         deterministic=args.deterministic
     )
     if loaded_state:

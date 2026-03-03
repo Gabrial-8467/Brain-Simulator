@@ -77,8 +77,9 @@ class VirtualBrain:
         self.risk_tolerance = 0.5
         self.risk_adapt_rate = 0.02
         self.homeostasis_target = 60.0
-        self.homeostasis_rate = 0.08
+        self.homeostasis_rate = 0.05
         self.homeostasis_max_delta = 1.5
+        self.homeostasis_gentle_upward_max = 0.5
 
         self.fatigue = 0.0
         self.fatigue_recovery_rate = 0.98
@@ -91,9 +92,16 @@ class VirtualBrain:
         self.burnout_threshold = 75
         self.resilience_growth_rate = 0.01
         self.resilience_damage_rate = 0.02
+        self.social_decay_rate = 0.001
+        self.social_decay_floor = 0.0002
+        self.social_gain_hold_steps = 8
 
         self.interaction_matrix = interaction_matrix or {}
         self.step_counter = 0
+        self._step_perception_valences: list[float] = []
+        self._social_decay_hold_counter = 0
+        self._high_emotion_focus_streak = 0
+        self._decision_debug: dict[str, Any] = {}
         self.recent_perceptions = deque(maxlen=50)
         self.scene_memory = deque(maxlen=25)
         self.novelty_memory = deque(maxlen=50)
@@ -162,6 +170,10 @@ class VirtualBrain:
         self._reflection_consciousness_boost = 0.0
         self.perceptions_since_reflection = 0
         self.complacency_counter = 0
+        self._wisdom_narrative_thresholds_hit: set[float] = set()
+        self._consciousness_narrative_hit = False
+        self._competence_streak = 0
+        self._competence_narrative_hit = False
 
         self.chemicals = {}
         for name, config in chemical_configs.items():
@@ -191,18 +203,48 @@ class VirtualBrain:
 
         if self.fatigue < 0.6:
             self.identity.update()
+        self._apply_social_value_decay()
         self._enforce_identity_floors()
 
         self._encode_autobiography()
 
         generate_spontaneous(self)
         self.current_focus = GlobalWorkspace.select()
+        focus_emotional = float(getattr(self.current_focus, "emotional_weight", 0.0) or 0.0)
+        if self.current_focus and focus_emotional > 0.7:
+            self._high_emotion_focus_streak += 1
+        else:
+            self._high_emotion_focus_streak = 0
+
+        self._decision_debug = {
+            "engine_available": bool(self.decision_engine),
+            "focus_present": bool(self.current_focus),
+            "focus_emotional_weight": round(focus_emotional, 4),
+            "emotional_threshold": 0.7,
+            "high_emotion_streak": self._high_emotion_focus_streak,
+            "decision_path": "none",
+            "forced_fallback": False,
+        }
 
         if self.decision_engine and self.current_focus:
             decision_output = self.decision_engine.decide(self.current_focus)
+            self._decision_debug["decision_path"] = "model"
+
+        if (
+            decision_output is None
+            and self.current_focus
+            and focus_emotional > 0.7
+            and self._high_emotion_focus_streak >= 3
+        ):
+            decision_output = self._build_fallback_decision(self.current_focus)
+            self._decision_debug["decision_path"] = "fallback"
+            self._decision_debug["forced_fallback"] = True
+
+        if decision_output:
             feedback = decision_output.get("feedback", {})
-            self._apply_decision_feedback(feedback)
-            self._clamp()
+            if feedback:
+                self._apply_decision_feedback(feedback)
+                self._clamp()
 
             action = decision_output.get("action")
             probabilities = decision_output.get("probabilities", {})
@@ -225,10 +267,12 @@ class VirtualBrain:
             self._reflection_consciousness_boost *= 0.9
         self.consciousness.modulate_risk(self, self.consciousness.score)
         self.consciousness.update_narrative(self, self.consciousness.score)
+        self._apply_narrative_milestones()
         self._enforce_identity_floors()
 
         self.step_counter += 1
         self.memory_manager.flush_pending()
+        self._step_perception_valences = []
         return decision_output
 
     def perceive(self, event: Any) -> None:
@@ -254,6 +298,12 @@ class VirtualBrain:
 
         valence = max(-1.0, min(1.0, valence))
         intensity = max(0.0, min(1.0, intensity))
+        self._step_perception_valences.append(valence)
+
+        if category in {"greeted", "praise"} and valence > 0:
+            self._social_decay_hold_counter = max(self._social_decay_hold_counter, self.social_gain_hold_steps)
+        elif category == "voice_recognized" and valence > 0.2:
+            self._social_decay_hold_counter = max(self._social_decay_hold_counter, self.social_gain_hold_steps)
 
         scene = self._analyze_perception(
             modality=modality,
@@ -417,9 +467,10 @@ class VirtualBrain:
             self.identity.add_evidence("competence", 1)
             self.identity.add_evidence("social_value", 1)
             self.identity.add_evidence("resilience", 0.25)
+            self._social_decay_hold_counter = max(self._social_decay_hold_counter, self.social_gain_hold_steps)
         elif event_type == "criticism":
             self.identity.add_evidence("competence", -1)
-            self.identity.add_evidence("social_value", -1)
+            self.identity.add_evidence("social_value", -0.25)
             self.identity.add_evidence("resilience", 0.15)
         elif event_type == "failure":
             self.identity.add_evidence("competence", -1)
@@ -430,9 +481,9 @@ class VirtualBrain:
             self.identity.add_evidence("resilience", 0.30)
         elif event_type in {"threat_detected", "loud_noise"}:
             self.identity.add_evidence("resilience", 0.12)
-            self.identity.add_evidence("social_value", -0.05)
+            self.identity.add_evidence("social_value", -0.02)
         elif event_type in {"ignored", "loneliness"}:
-            self.identity.add_evidence("social_value", -1.0)
+            self.identity.add_evidence("social_value", -0.4)
             self.identity.add_evidence("resilience", 0.08)
 
         for chem, delta in effects.items():
@@ -499,8 +550,11 @@ class VirtualBrain:
             + self.wisdom * 0.35
             + self.development.reflection_depth * 0.0004
         )
-        self.development.maturity += (maturity_target - self.development.maturity) * 0.05
-        self.development.maturity = max(0, min(1.0, self.development.maturity))
+        maturity_delta = max(0.0, (maturity_target - self.development.maturity) * 0.05)
+        cortisol_level = self.chemicals.get("cortisol", {}).get("value", 0.0)
+        if cortisol_level > 70:
+            maturity_delta *= 0.5
+        self.development.maturity = min(1.0, self.development.maturity + maturity_delta)
 
         self.previous_chem_snapshot = {k: self.chemicals[k]["value"] for k in self.chemicals}
 
@@ -604,10 +658,109 @@ class VirtualBrain:
         GlobalWorkspace.post(transition_thought)
         return True
 
+    def _apply_social_value_decay(self) -> None:
+        if not hasattr(self.identity, "traits") or "social_value" not in self.identity.traits:
+            return
+        if self._social_decay_hold_counter > 0:
+            self._social_decay_hold_counter -= 1
+            return
+
+        value = float(self.identity.traits.get("social_value", 0.0))
+        if value == 0.0:
+            return
+
+        decay_magnitude = max(self.social_decay_floor, abs(value) * self.social_decay_rate)
+        if value > 0:
+            value = max(0.0, value - decay_magnitude)
+        else:
+            value = min(0.0, value + decay_magnitude)
+
+        self.identity.traits["social_value"] = round(max(-0.5, min(1.0, value)), 4)
+
+    def _build_fallback_decision(self, focus: Thought) -> dict[str, Any]:
+        metadata = focus.metadata or {}
+        valence = float(metadata.get("valence", 0.0) or 0.0)
+        if valence >= 0.2:
+            action = "support"
+        elif valence <= -0.2:
+            action = "challenge"
+        else:
+            action = "suggest"
+
+        actions = ["support", "challenge", "suggest", "refuse", "neutral"]
+        if self.decision_engine and hasattr(self.decision_engine, "model"):
+            actions = list(getattr(self.decision_engine.model, "actions", actions)) or actions
+            if action not in actions:
+                action = actions[0]
+
+        probabilities = {name: 0.0 for name in actions}
+        probabilities[action] = 0.65
+        residue = 0.35 / max(1, len(actions) - 1)
+        for name in probabilities:
+            if name != action:
+                probabilities[name] = residue
+
+        feedback = {}
+        if self.decision_engine and hasattr(self.decision_engine, "action_feedback"):
+            feedback = self.decision_engine.action_feedback.get(action, {})
+
+        return {
+            "action": action,
+            "probabilities": probabilities,
+            "feedback": feedback,
+            "forced_fallback": True,
+        }
+
+    def _build_milestone_narrative(self, milestone: str) -> str:
+        stage = self.development_stage
+        stage_text = {
+            "child": "as I learn the world",
+            "teen": "as I shape who I am",
+            "adult": "as I choose who to become",
+        }.get(stage, "as I keep developing")
+
+        templates = {
+            "wisdom_0.3": f"I notice patterns {stage_text}.",
+            "wisdom_0.5": f"I can reflect before reacting {stage_text}.",
+            "wisdom_0.7": f"I understand consequences and grow through them {stage_text}.",
+            "wisdom_0.9": f"My judgment feels grounded and deliberate {stage_text}.",
+            "consciousness_0.8": f"My awareness is stable and integrated {stage_text}.",
+            "competence_streak": f"I trust my abilities and act with confidence {stage_text}.",
+        }
+        return templates.get(milestone, "I am learning who I am.")
+
+    def _apply_narrative_milestones(self) -> None:
+        competence = float(self.identity.get("competence"))
+        if competence >= 0.7:
+            self._competence_streak += 1
+        else:
+            self._competence_streak = 0
+
+        wisdom_thresholds = (0.3, 0.5, 0.7, 0.9)
+        for threshold in wisdom_thresholds:
+            if self.wisdom >= threshold and threshold not in self._wisdom_narrative_thresholds_hit:
+                self._wisdom_narrative_thresholds_hit.add(threshold)
+                self.narrative_engine.current_narrative = self._build_milestone_narrative(
+                    f"wisdom_{threshold}"
+                )
+
+        if self.consciousness.score >= 0.8 and not self._consciousness_narrative_hit:
+            self._consciousness_narrative_hit = True
+            self.narrative_engine.current_narrative = self._build_milestone_narrative("consciousness_0.8")
+
+        if self._competence_streak >= 10 and not self._competence_narrative_hit:
+            self._competence_narrative_hit = True
+            self.narrative_engine.current_narrative = self._build_milestone_narrative("competence_streak")
+
     def _enforce_identity_floors(self) -> None:
         if hasattr(self.identity, "traits") and "resilience" in self.identity.traits:
             self.identity.traits["resilience"] = round(
                 max(0.2, min(1.0, self.identity.traits["resilience"])),
+                4,
+            )
+        if hasattr(self.identity, "traits") and "social_value" in self.identity.traits:
+            self.identity.traits["social_value"] = round(
+                max(-0.5, min(1.0, self.identity.traits["social_value"])),
                 4,
             )
 
@@ -1159,19 +1312,19 @@ class VirtualBrain:
             )
 
     def _apply_homeostasis(self):
+        has_positive_perception = any(v > 0 for v in self._step_perception_valences)
         for chem_name, data in self.chemicals.items():
             current = data["value"]
             target = float(data.get("baseline", self.homeostasis_target))
-            decay = max(data["decay"], self.homeostasis_rate)
-            distance = target - current
-            distance_scale = 0.25 + 0.75 * min(1.0, abs(distance) / 30.0)
-            delta = distance * decay * distance_scale
+            delta = (target - current) * self.homeostasis_rate
             delta = max(-self.homeostasis_max_delta, min(self.homeostasis_max_delta, delta))
 
+            if chem_name == "dopamine" and delta > 0 and not has_positive_perception:
+                delta = min(delta, self.homeostasis_gentle_upward_max)
+
             if chem_name == "cortisol" and current > target:
-                extra_decay = min(0.8, (current - target) * 0.04)
-                delta -= extra_decay
-                delta = max(-2.0, delta)
+                delta -= min(1.0, (current - target) * 0.06)
+                delta = max(-self.homeostasis_max_delta, delta)
 
             data["value"] = current + delta
 
@@ -1292,6 +1445,7 @@ class VirtualBrain:
                 "step_counter": self.step_counter,
                 "perceptions_since_reflection": self.perceptions_since_reflection,
                 "fatigue": self.fatigue,
+                "decision_debug": dict(self._decision_debug),
             }
         )
 
@@ -1323,7 +1477,8 @@ class VirtualBrain:
 
         for trait, value in identity_traits.items():
             if trait in self.identity.traits and isinstance(value, (int, float)):
-                self.identity.traits[trait] = round(max(0.0, min(1.0, float(value))), 4)
+                minimum = -0.5 if trait == "social_value" else 0.0
+                self.identity.traits[trait] = round(max(minimum, min(1.0, float(value))), 4)
 
         if isinstance(state_dict.get("development_stage"), str):
             self.development_stage = state_dict["development_stage"]

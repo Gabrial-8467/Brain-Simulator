@@ -48,8 +48,9 @@ class Consciousness:
             + novelty_bonus
         )
         target = max(0.0, min(1.0, raw))
-        # Preserve a slow upward trend and avoid abrupt drops.
-        self.score = max(target, self.score * 0.985)
+        # Smooth step-to-step noise while still integrating new evidence.
+        self.score = (0.95 * self.score) + (0.05 * target)
+        self.score = max(0.0, min(1.0, self.score))
         return self.score
 
     def modulate_risk(self, brain: Any, score: float) -> None:

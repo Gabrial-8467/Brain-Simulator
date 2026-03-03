@@ -47,6 +47,7 @@ class DynamicDevelopment:
     # -----------------------------------------
 
     def update(self):
+        previous_maturity = self.maturity
 
         experience_factor = min(1.0, self.experience_points / 500)
         emotional_factor = min(1.0, self.reflection_depth / 50)
@@ -56,13 +57,25 @@ class DynamicDevelopment:
 
         balance_factor = abs(success_balance - stress_balance)
 
-        self.maturity = (
+        target_maturity = (
             experience_factor * 0.4 +
             emotional_factor * 0.4 +
             (1 - balance_factor) * 0.2
         )
+        target_maturity = min(1.0, target_maturity)
 
-        self.maturity = min(1.0, self.maturity)
+        # Monotonic maturity: stress can slow growth but never reverse it.
+        stress_ratio = min(1.0, self.stress_exposure / max(1.0, self.experience_points))
+        stress_slowdown = 1.0 - (0.5 * stress_ratio)
+        stress_slowdown = max(0.35, min(1.0, stress_slowdown))
+        assimilation = max(0.0, target_maturity - previous_maturity) * (0.02 * stress_slowdown)
+        growth_step = (
+            (experience_factor * 0.0025) + (emotional_factor * 0.0025)
+        ) * stress_slowdown
+        self.maturity = max(
+            previous_maturity,
+            min(1.0, previous_maturity + assimilation + growth_step),
+        )
 
     def get_snapshot(self):
         return {
