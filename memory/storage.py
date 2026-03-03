@@ -11,13 +11,19 @@ class MemoryStorage:
 
     def _load(self):
         if os.path.exists(self.file_path):
-            with open(self.file_path, "r") as f:
-                data = json.load(f)
-                self.memories = data
+            try:
+                with open(self.file_path, "r") as f:
+                    data = json.load(f)
+                    self.memories = data
+            except (json.JSONDecodeError, OSError):
+                self.memories = []
         else:
             self.memories = []
 
     def save(self):
+        directory = os.path.dirname(self.file_path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
         with open(self.file_path, "w") as f:
             json.dump(self.memories, f, indent=4)
 

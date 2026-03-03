@@ -12,22 +12,44 @@ class Consciousness:
     def compute_score(self, brain: Any) -> float:
         stability = GlobalWorkspace.focus_stability()
         streak_bonus = min(0.5, (GlobalWorkspace._streak // 5) * 0.1)
-        development_bonus = min(
-            0.3,
-            getattr(getattr(brain, "development", None), "experience_points", 0) / 500.0,
-        )
+        experience_points = getattr(getattr(brain, "development", None), "experience_points", 0)
+        development_bonus = min(0.35, experience_points / 1000.0)
         reflection_bonus = min(
             0.2,
             getattr(getattr(brain, "development", None), "reflection_depth", 0.0) / 100.0,
         )
+
+        recent = list(getattr(brain, "recent_perceptions", []))[-20:]
+        vision_bonus = 0.02 if any(p.get("modality") == "vision" for p in recent) else 0.0
+        hearing_bonus = 0.02 if any(p.get("modality") == "hearing" for p in recent) else 0.0
+        novelty_weighted = 0.0
+        if recent:
+            for idx, p in enumerate(recent):
+                recency_weight = (idx + 1) / len(recent)
+                novelty = float((p.get("scene") or {}).get("novelty", 0.0))
+                if p.get("modality") in ("vision", "hearing"):
+                    novelty *= 1.2
+                novelty_weighted += novelty * recency_weight
+        novelty_bonus = min(0.2, novelty_weighted * 0.05)
 
         source_bonus = 0.0
         focus = GlobalWorkspace.current_focus()
         if focus and focus.source in ("memory", "goal"):
             source_bonus = 0.1
 
-        raw = stability + streak_bonus + source_bonus + development_bonus + reflection_bonus
-        self.score = max(0.0, min(1.0, raw))
+        raw = (
+            stability
+            + streak_bonus
+            + source_bonus
+            + development_bonus
+            + reflection_bonus
+            + vision_bonus
+            + hearing_bonus
+            + novelty_bonus
+        )
+        target = max(0.0, min(1.0, raw))
+        # Preserve a slow upward trend and avoid abrupt drops.
+        self.score = max(target, self.score * 0.985)
         return self.score
 
     def modulate_risk(self, brain: Any, score: float) -> None:

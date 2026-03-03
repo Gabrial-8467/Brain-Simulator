@@ -1,8 +1,10 @@
 import argparse
+import os
 import sys
 import yaml
 
 from core.brain import VirtualBrain
+from memory.memory_manager import MemoryManager
 from simulation.simulator import Simulator
 from simulation.scenarios import build_structured_learning_scenario
 from utils.logger import BrainLogger
@@ -57,6 +59,16 @@ def main():
 
     logger = BrainLogger()
     logger.info("Starting Virtual Brain...")
+    memory_manager = MemoryManager(storage_path="memory_store.json")
+
+    loaded_state = None
+    if os.path.exists("memory_store.json"):
+        payload = memory_manager.load()
+        if isinstance(payload, dict):
+            loaded_state = payload
+            logger.info("Loaded persisted brain state from memory_store.json")
+        else:
+            logger.warning("memory_store.json exists but is not a brain state snapshot; starting fresh.")
 
     chemical_configs = load_chemical_config()
 
@@ -65,6 +77,8 @@ def main():
         interaction_matrix=chemical_configs.get("interactions"),
         deterministic=args.deterministic
     )
+    if loaded_state:
+        brain.set_state(loaded_state)
 
     # ================================
     # SIMULATION MODE
@@ -75,7 +89,7 @@ def main():
             f"Running structured learning simulation for {args.cycles} cycles"
         )
 
-        simulator = Simulator(brain)
+        simulator = Simulator(brain, memory_manager=memory_manager)
         scenario = build_structured_learning_scenario(args.cycles)
 
         simulator.run_scenario(
@@ -89,7 +103,8 @@ def main():
     elif args.mode == "live":
 
         logger.info("Running in basic live debug mode")
-        run_live_debug(brain)
+        run_live_debug(brain, memory_manager=memory_manager)
+        memory_manager.save(brain.get_state())
 
     logger.info("Shutting down Virtual Brain.")
 
@@ -98,7 +113,7 @@ def main():
 # BASIC LIVE DEBUG (OLD STYLE)
 # =====================================================
 
-def run_live_debug(brain):
+def run_live_debug(brain, memory_manager=None):
 
     print("Virtual Brain Debug Mode. Type 'exit' to quit.\n")
 
@@ -112,6 +127,9 @@ def run_live_debug(brain):
 
         state = brain.get_state()
         print(f"Current State: {state}\n")
+
+        if memory_manager:
+            memory_manager.save(state)
 
 
 # =====================================================

@@ -6,6 +6,8 @@ from memory.storage import MemoryStorage
 class MemoryManager:
     def __init__(self, storage_path="memory_store.json", scoring_config=None):
         self.storage = MemoryStorage(storage_path)
+        self.pending_memories = []
+        self.max_pending_writes = 25
 
         # Dynamic scoring weights
         self.scoring_config = scoring_config or {
@@ -16,9 +18,24 @@ class MemoryManager:
 
     def create_memory(self, memory_type: str, content: dict, metadata: dict = None):
         memory = Memory(memory_type, content, metadata)
-        self.storage.add(memory.to_dict())
+        self.pending_memories.append(memory.to_dict())
+        if len(self.pending_memories) >= self.max_pending_writes:
+            self.flush_pending()
+
+    def flush_pending(self):
+        if not self.pending_memories:
+            return
+
+        existing = self.storage.get_all()
+        if not isinstance(existing, list):
+            existing = []
+
+        existing.extend(self.pending_memories)
+        self.pending_memories = []
+        self.storage.update_all(existing)
 
     def decay_memories(self):
+        self.flush_pending()
         memories = self.storage.get_all()
 
         for mem in memories:
@@ -30,6 +47,7 @@ class MemoryManager:
         self.storage.update_all(memories)
 
     def retrieve(self, context: dict, limit=5):
+        self.flush_pending()
         memories = self.storage.get_all()
         scored_memories = []
 
@@ -51,6 +69,18 @@ class MemoryManager:
         scored_memories.sort(key=lambda x: x["retrieval_score"], reverse=True)
 
         return scored_memories[:limit]
+
+    def save(self, state_dict: dict):
+        """Persist an arbitrary state payload to storage."""
+        self.flush_pending()
+        if state_dict is None:
+            state_dict = {}
+        self.storage.update_all(state_dict)
+
+    def load(self):
+        """Load persisted state payload from storage."""
+        self.flush_pending()
+        return self.storage.get_all()
 
     def _calculate_recency(self, timestamp):
         age = time.time() - timestamp

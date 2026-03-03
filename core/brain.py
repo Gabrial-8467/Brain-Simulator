@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import random
 import re
+import time
 from collections import deque
 from dataclasses import asdict
 from typing import Any
@@ -19,6 +21,7 @@ from cognition.narrative_engine import NarrativeEngine
 from decision.strategic_planner import StrategicPlanner
 from learning.appraisal_engine import AppraisalEngine
 from learning.similarity_engine import SimilarityEngine
+from memory.memory_manager import MemoryManager
 
 
 class VirtualBrain:
@@ -29,6 +32,7 @@ class VirtualBrain:
         decision_engine=None,
         feedback_multiplier: float = 1.0,
         deterministic: bool = False,
+        memory_storage_path: str | None = None,
     ):
         self.deterministic = deterministic
         self.feedback_multiplier = feedback_multiplier
@@ -53,6 +57,15 @@ class VirtualBrain:
             similarity_engine=self.similarity_engine,
             identity=self.identity,
         )
+        self.memory_storage_path = (
+            memory_storage_path
+            or os.getenv("BRAIN_EVENT_MEMORY_PATH")
+            or os.getenv("BRAIN_MEMORY_PATH")
+            or "memory_events.json"
+        )
+        self.memory_manager = MemoryManager(storage_path=self.memory_storage_path)
+        # Ensure persistence file exists from startup.
+        self.memory_manager.storage.save()
 
         self.current_focus: Thought | None = None
         self.experience = 0.0
@@ -63,6 +76,9 @@ class VirtualBrain:
         self.previous_chem_snapshot = {}
         self.risk_tolerance = 0.5
         self.risk_adapt_rate = 0.02
+        self.homeostasis_target = 60.0
+        self.homeostasis_rate = 0.08
+        self.homeostasis_max_delta = 1.5
 
         self.fatigue = 0.0
         self.fatigue_recovery_rate = 0.98
@@ -80,6 +96,8 @@ class VirtualBrain:
         self.step_counter = 0
         self.recent_perceptions = deque(maxlen=50)
         self.scene_memory = deque(maxlen=25)
+        self.novelty_memory = deque(maxlen=50)
+        self._scene_counts: dict[str, int] = {}
         self.concept_memory = {}
         self.stopwords = {
             "the", "a", "an", "and", "or", "but", "with", "to", "of", "in", "on",
@@ -88,6 +106,7 @@ class VirtualBrain:
             "object", "objects", "attribute", "attributes", "relation", "relations",
             "motion", "confidence",
             "speaker", "text", "keyword", "keywords", "sentiment", "prosody",
+            "objects", "relations",
         }
         self.concept_aliases = {
             "finger": "fingers",
@@ -132,15 +151,17 @@ class VirtualBrain:
             "small": "small",
             "large": "large",
         }
-        self.development_stage = "baby"
+        self.development_stage = "child"
         self.stage_learning_multipliers = {
-            "baby": 0.7,
             "child": 1.0,
             "teen": 1.25,
             "adult": 1.5,
         }
-        self.reflection_interval = 12
+        self.reflection_interval = 50
+        self.narrative_update_interval = 25
         self._reflection_consciousness_boost = 0.0
+        self.perceptions_since_reflection = 0
+        self.complacency_counter = 0
 
         self.chemicals = {}
         for name, config in chemical_configs.items():
@@ -170,6 +191,7 @@ class VirtualBrain:
 
         if self.fatigue < 0.6:
             self.identity.update()
+        self._enforce_identity_floors()
 
         self._encode_autobiography()
 
@@ -193,15 +215,20 @@ class VirtualBrain:
                 self.self_reflection.propose_reflection_thought(self, action, regret)
 
         self._update_cognitive_growth(regret)
+        stage_changed = self._update_stage_transition()
         self._periodic_reflection()
+        if not stage_changed and (self.step_counter % self.narrative_update_interval == 0):
+            self._refresh_narrative(force=True)
         self.consciousness.compute_score(self)
         if self._reflection_consciousness_boost > 0.0:
             self.consciousness.score = min(1.0, self.consciousness.score + self._reflection_consciousness_boost)
             self._reflection_consciousness_boost *= 0.9
         self.consciousness.modulate_risk(self, self.consciousness.score)
         self.consciousness.update_narrative(self, self.consciousness.score)
+        self._enforce_identity_floors()
 
         self.step_counter += 1
+        self.memory_manager.flush_pending()
         return decision_output
 
     def perceive(self, event: Any) -> None:
@@ -213,23 +240,30 @@ class VirtualBrain:
                 return event.get(name, default)
             return default
 
+        modality = str(_read("modality", "experience")).strip().lower() or "experience"
         category = str(_read("category", "")).strip().lower()
         content = str(_read("content", "")).strip()
         valence = float(_read("valence", 0.0))
         intensity = float(_read("intensity", 0.0))
         source = str(_read("source", "simulated"))
         timestamp = float(_read("timestamp", 0.0))
+        scene_input = _read("scene", {}) or {}
 
         if not content:
-            return
+            content = f"{modality} event"
 
         valence = max(-1.0, min(1.0, valence))
         intensity = max(0.0, min(1.0, intensity))
 
-        scene = self._analyze_perception(modality="experience", content=f"{category} {content}")
+        scene = self._analyze_perception(
+            modality=modality,
+            content=f"{category} {content}",
+            valence=valence,
+            provided_scene=scene_input,
+        )
         self.recent_perceptions.append(
             {
-                "modality": "experience",
+                "modality": modality,
                 "content": content,
                 "category": category,
                 "source": source,
@@ -239,47 +273,126 @@ class VirtualBrain:
                 "scene": scene,
             }
         )
+        self.perceptions_since_reflection += 1
         self.scene_memory.append(scene)
-        self._learn_from_perception("experience", f"{category} {content}", source=source, scene=scene)
+        self.novelty_memory.append(
+            {
+                "modality": modality,
+                "novelty": scene.get("novelty", 0.0),
+                "timestamp": timestamp or time.time(),
+            }
+        )
+        self._learn_from_perception(modality, f"{category} {content}", source=source, scene=scene)
 
-        positive = max(0.0, valence)
-        negative = max(0.0, -valence)
-        effects = {
-            "dopamine": (2.0 + 8.0 * positive) * intensity,
-            "oxytocin": (1.0 + 6.0 * positive if category in {"greeted", "praise", "success"} else 0.5) * intensity,
-            "serotonin": (1.0 + 5.0 * positive) * intensity,
-            "cortisol": (1.0 + 8.0 * negative) * intensity,
-        }
-        if category in {"loneliness", "ignored", "boredom"}:
-            effects["oxytocin"] -= 2.0 * intensity
-            effects["dopamine"] -= 1.5 * intensity
+        effects = self._effects_from_event(
+            modality=modality,
+            category=category,
+            valence=valence,
+            intensity=intensity,
+        )
 
         self.inject_event(
             effects=effects,
             event_type=category or "experience",
             source=source,
-            tags=["synthetic_experience", category or "experience"],
+            tags=[modality, "perception_event", category or "experience"],
         )
 
+        metadata = {}
+        if hasattr(event, "__dataclass_fields__"):
+            metadata = asdict(event)
+        elif isinstance(event, dict):
+            metadata = dict(event)
+
         self.autobiography.record_event(
-            description=f"perceived_{category or 'experience'}: {content}",
+            description=f"perceived_{modality}_{category or 'event'}: {content}",
             chemicals={k: v["value"] for k, v in self.chemicals.items()},
             identity_snapshot=self.identity.get_snapshot(),
-            metadata=asdict(event) if hasattr(event, "__dataclass_fields__") else dict(event),
+            metadata=metadata,
+        )
+        self.memory_manager.create_memory(
+            memory_type=f"perception_{modality}",
+            content={
+                "category": category or "event",
+                "content": content,
+                "valence": valence,
+                "intensity": intensity,
+                "source": source,
+                "timestamp": timestamp or time.time(),
+                "scene": scene,
+            },
+            metadata={
+                "development_stage": self.development_stage,
+                "step_counter": self.step_counter,
+            },
         )
         self.autobiography.propose_memory_thought(self)
 
-        self.development.observe_event(category or "experience", {k: v["value"] for k, v in self.chemicals.items()})
+        self.development.observe_event(category or modality, {k: v["value"] for k, v in self.chemicals.items()})
 
         event_thought = Thought(
-            content=f"Experienced {category or 'event'}: {content}",
+            content=f"Experienced {modality}::{category or 'event'}: {content}",
             source="perception",
-            emotional_weight=min(1.0, abs(valence) * (0.6 + 0.4 * intensity)),
-            novelty=min(1.0, 0.5 + scene.get("novelty", 0.0) * 0.5),
+            emotional_weight=min(1.0, abs(valence) * 0.7 + scene.get("salience", 0.0) * 0.3),
+            novelty=min(1.0, scene.get("novelty", 0.0)),
             relevance_to_goals=0.25 + (0.2 if category in {"success", "failure", "praise"} else 0.0),
-            metadata={"category": category, "valence": valence, "intensity": intensity},
+            metadata={
+                "category": category,
+                "valence": valence,
+                "intensity": intensity,
+                "modality": modality,
+                "scene": scene,
+            },
         )
         GlobalWorkspace.post(event_thought)
+
+    def _effects_from_event(self, modality: str, category: str, valence: float, intensity: float) -> dict:
+        positive = max(0.0, valence)
+        negative = max(0.0, -valence)
+
+        effects = {
+            "dopamine": (2.2 * positive - 1.2 * negative) * intensity,
+            "oxytocin": (1.8 * positive - 0.8 * negative) * intensity,
+            "serotonin": (1.6 * positive - 0.9 * negative) * intensity,
+            "cortisol": (2.6 * negative - 1.1 * positive) * intensity,
+        }
+
+        if category in {"praise", "success", "greeted", "face_recognized"}:
+            effects["oxytocin"] += 2.0 * intensity
+            effects["dopamine"] += 1.3 * intensity
+            effects["cortisol"] -= 1.2 * intensity
+        if category in {"criticism", "failure", "loud_noise", "threat_detected"}:
+            effects["cortisol"] += 3.5 * intensity
+            effects["dopamine"] -= 1.2 * intensity
+        if category in {"loneliness", "ignored", "boredom", "silence"}:
+            effects["oxytocin"] -= 1.8 * intensity
+            effects["dopamine"] -= 1.0 * intensity
+        if category in {"face_unknown", "speech_detected", "novelty"}:
+            effects["dopamine"] += 0.9 * intensity
+        if modality == "vision" and category == "environment_scan":
+            effects["dopamine"] += 0.4 * intensity
+        if modality == "hearing" and category == "voice_recognized":
+            if valence > 0.15:
+                effects["oxytocin"] += 1.0 * intensity
+                effects["cortisol"] -= 0.6 * intensity
+            elif valence < -0.15:
+                effects["oxytocin"] -= 1.0 * intensity
+                effects["cortisol"] += 1.0 * intensity
+
+        for chem in list(effects.keys()):
+            effects[chem] = max(-6.0, min(6.0, effects[chem]))
+        return effects
+
+    def _saturation_scaled_delta(self, chem: str, delta: float) -> float:
+        data = self.chemicals[chem]
+        value = data["value"]
+        span = max(1e-6, data["max"] - data["min"])
+        if delta >= 0:
+            headroom = (data["max"] - value) / span
+        else:
+            headroom = (value - data["min"]) / span
+        scale = max(0.15, min(1.0, headroom * 1.8))
+        return delta * scale
 
     def inject_event(self, effects: dict, event_type=None, source=None, tags=None):
         resilience = self.identity.get("resilience")
@@ -294,7 +407,8 @@ class VirtualBrain:
 
         for chem, delta in predicted.items():
             if chem in self.chemicals:
-                self.chemicals[chem]["value"] += delta * anticipation_strength
+                bounded = max(-3.0, min(3.0, delta * anticipation_strength))
+                self.chemicals[chem]["value"] += self._saturation_scaled_delta(chem, bounded)
 
         previous_state = {name: self.chemicals[name]["value"] for name in self.chemicals}
         identity_before = self.identity.get_snapshot()
@@ -302,22 +416,33 @@ class VirtualBrain:
         if event_type == "praise":
             self.identity.add_evidence("competence", 1)
             self.identity.add_evidence("social_value", 1)
+            self.identity.add_evidence("resilience", 0.25)
         elif event_type == "criticism":
             self.identity.add_evidence("competence", -1)
             self.identity.add_evidence("social_value", -1)
+            self.identity.add_evidence("resilience", 0.15)
         elif event_type == "failure":
             self.identity.add_evidence("competence", -1)
+            self.identity.add_evidence("resilience", 0.10)
         elif event_type == "success":
             self.identity.add_evidence("competence", 1)
             self.identity.add_evidence("intelligence", 1)
+            self.identity.add_evidence("resilience", 0.30)
+        elif event_type in {"threat_detected", "loud_noise"}:
+            self.identity.add_evidence("resilience", 0.12)
+            self.identity.add_evidence("social_value", -0.05)
+        elif event_type in {"ignored", "loneliness"}:
+            self.identity.add_evidence("social_value", -1.0)
+            self.identity.add_evidence("resilience", 0.08)
 
         for chem, delta in effects.items():
             if chem in self.chemicals:
-                if chem in ["dopamine", "serotonin"] and delta < 0:
-                    delta *= 1 - resilience * 0.5
-                if chem == "cortisol" and resilience > 0:
-                    delta *= 1 - resilience * 0.4
-                self.chemicals[chem]["value"] += delta
+                bounded = max(-8.0, min(8.0, float(delta)))
+                if chem in ["dopamine", "serotonin"] and bounded < 0:
+                    bounded *= 1 - resilience * 0.5
+                if chem == "cortisol":
+                    bounded *= 1 - resilience * 0.4
+                self.chemicals[chem]["value"] += self._saturation_scaled_delta(chem, bounded)
 
         self._clamp()
 
@@ -380,27 +505,111 @@ class VirtualBrain:
         self.previous_chem_snapshot = {k: self.chemicals[k]["value"] for k in self.chemicals}
 
     def _periodic_reflection(self) -> None:
-        if self.step_counter <= 0 or (self.step_counter % self.reflection_interval) != 0:
+        if self.perceptions_since_reflection < self.reflection_interval:
             return
 
-        recent = self.autobiography.get_recent_events(20)
+        recent_perceptions = list(self.recent_perceptions)[-50:]
+        if not recent_perceptions:
+            return
+
+        summary = self._summarize_recent_perceptions(recent_perceptions)
+        reflection_event = {
+            "modality": "internal",
+            "content": summary,
+            "category": "reflection",
+            "source": "self_reflection",
+            "valence": 0.25,
+            "intensity": 0.55,
+            "timestamp": time.time(),
+            "scene": {"summary": summary, "novelty": 0.7, "salience": 0.55},
+        }
+        self.perceive(reflection_event)
+
+        self.development.reflection_depth += 0.5
+        self.self_reflection.wisdom = min(1.0, self.self_reflection.wisdom + 0.05)
+        self.wisdom = min(1.0, self.wisdom + 0.05)
+        self._reflection_consciousness_boost = min(0.25, self._reflection_consciousness_boost + 0.04)
+        self._refresh_narrative(force=True)
+        self.perceptions_since_reflection = 0
+
+        reflect_thought = Thought(
+            content=f"I reflected on {len(recent_perceptions)} recent perceptions.",
+            source="internal",
+            emotional_weight=0.3,
+            novelty=0.6,
+            relevance_to_goals=0.6,
+        )
+        GlobalWorkspace.post(reflect_thought)
+
+    def _summarize_recent_perceptions(self, recent_perceptions: list[dict]) -> str:
+        counts: dict[str, int] = {}
+        for item in recent_perceptions:
+            cat = str(item.get("category", "observation") or "observation").lower()
+            counts[cat] = counts.get(cat, 0) + 1
+        top = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:3]
+        summary = ", ".join([f"{k}:{v}" for k, v in top]) if top else "no dominant pattern"
+        return f"Reflection summary over {len(recent_perceptions)} perceptions -> {summary}"
+
+    def _refresh_narrative(self, force: bool = False) -> None:
+        if not force:
+            return
+        recent = list(self.recent_perceptions)[-40:]
         if not recent:
             return
 
-        self.development.reflection_depth += 0.2 + (0.01 * len(recent))
-        self.self_reflection.wisdom = min(1.0, self.self_reflection.wisdom + 0.01)
-        self.wisdom = min(1.0, self.wisdom + 0.005)
-        self._reflection_consciousness_boost = min(0.25, self._reflection_consciousness_boost + 0.02)
-        self.narrative_engine.update_narrative(recent)
+        counts: dict[str, int] = {}
+        for item in recent:
+            cat = str(item.get("category", "observation") or "observation").lower()
+            counts[cat] = counts.get(cat, 0) + 1
+        total = max(1, len(recent))
 
-        reflect_thought = Thought(
-            content=f"I am reflecting on {len(recent)} recent experiences.",
-            source="internal",
-            emotional_weight=0.2,
-            novelty=0.3,
-            relevance_to_goals=0.5,
+        critical = counts.get("criticism", 0) + counts.get("failure", 0)
+        positive = counts.get("success", 0) + counts.get("praise", 0)
+        isolated = counts.get("loneliness", 0) + counts.get("ignored", 0)
+
+        if critical / total >= 0.4:
+            new_narrative = "I struggle but I keep trying."
+        elif positive / total >= 0.4:
+            new_narrative = "I am capable and growing."
+        elif isolated / total >= 0.35:
+            new_narrative = "I feel alone in the world."
+        else:
+            new_narrative = "I am learning who I am."
+
+        self.narrative_engine.current_narrative = new_narrative
+
+    def _update_stage_transition(self) -> bool:
+        new_stage = self._compute_development_stage()
+        if new_stage == self.development_stage:
+            return False
+
+        old_stage = self.development_stage
+        self.development_stage = new_stage
+        transition_text = "I am no longer just forming. I am becoming someone."
+        self.narrative_engine.current_narrative = transition_text
+
+        self.autobiography.record_event(
+            description=f"stage_transition:{old_stage}->{new_stage}",
+            chemicals={k: v["value"] for k, v in self.chemicals.items()},
+            identity_snapshot=self.identity.get_snapshot(),
+            metadata={"type": "stage_transition", "salience": 1.0},
         )
-        GlobalWorkspace.post(reflect_thought)
+        transition_thought = Thought(
+            content=f"Stage transition: {old_stage} to {new_stage}",
+            source="memory",
+            emotional_weight=0.7,
+            novelty=0.9,
+            relevance_to_goals=0.8,
+        )
+        GlobalWorkspace.post(transition_thought)
+        return True
+
+    def _enforce_identity_floors(self) -> None:
+        if hasattr(self.identity, "traits") and "resilience" in self.identity.traits:
+            self.identity.traits["resilience"] = round(
+                max(0.2, min(1.0, self.identity.traits["resilience"])),
+                4,
+            )
 
     def get_stt_languages(self):
         return ("en-US", "en-IN")
@@ -422,54 +631,44 @@ class VirtualBrain:
         if not modality or not content:
             return
 
-        effects = {}
         event_type = "observation"
+        valence = 0.1
+        intensity = 0.3
 
         if modality == "hearing":
-            event_type = "social_contact"
-            effects = {"oxytocin": 0.4, "dopamine": 0.2}
+            event_type = "speech_detected"
+            valence = 0.2
+            intensity = 0.35
         elif modality == "speaking":
             event_type = "expression"
-            effects = {"oxytocin": 0.3, "cortisol": -0.2}
+            valence = 0.1
+            intensity = 0.3
         elif modality == "vision":
-            event_type = "novel_stimulus"
-            effects = {"dopamine": 0.25}
-        else:
-            effects = {"dopamine": 0.1}
+            event_type = "environment_scan"
+            valence = 0.1
+            intensity = 0.28
 
-        if "thank" in content.lower():
-            effects["oxytocin"] = effects.get("oxytocin", 0) + 0.5
-            event_type = "social_reward"
+        low_content = content.lower()
+        if "threat" in low_content or "danger" in low_content:
+            event_type = "threat_detected"
+            valence = -0.8
+            intensity = 0.82
+        elif "thank" in low_content:
+            event_type = "praise"
+            valence = 0.5
+            intensity = 0.55
 
-        scene = self._analyze_perception(modality=modality, content=content)
-        self.recent_perceptions.append(
+        self.perceive(
             {
                 "modality": modality,
                 "content": content,
+                "category": event_type,
                 "source": source,
-                "scene": scene,
+                "valence": valence,
+                "intensity": intensity,
+                "timestamp": time.time(),
             }
         )
-        self.scene_memory.append(scene)
-        self._learn_from_perception(modality=modality, content=content, source=source, scene=scene)
-
-        self.inject_event(
-            effects=effects,
-            event_type=event_type,
-            source=source,
-            tags=[modality, "perception"],
-        )
-
-        scene_summary = scene.get("summary", content[:80])
-        th = Thought(
-            content=f"Perceived {modality}: {scene_summary[:120]}",
-            source="perception",
-            emotional_weight=min(1.0, 0.15 + scene.get("salience", 0.0) * 0.2),
-            novelty=min(1.0, 0.6 + scene.get("novelty", 0.0) * 0.3),
-            relevance_to_goals=min(1.0, 0.2 + scene.get("task_relevance", 0.0) * 0.4),
-            metadata={"scene": scene},
-        )
-        GlobalWorkspace.post(th)
 
     def receive_visual_signal(self, signal: Any) -> None:
         """
@@ -509,8 +708,52 @@ class VirtualBrain:
         if attr_descriptions:
             parts.append("attributes: " + "; ".join(attr_descriptions))
 
-        rel_descriptions = []
+        normalized_relations = []
         for rel in relations:
+            left = self._normalize_token(str(rel.get("from", "")))
+            edge = self._normalize_token(str(rel.get("rel", "")))
+            right = self._normalize_token(str(rel.get("to", "")))
+            if left and edge and right:
+                if edge == "threat" and left == right:
+                    continue
+                normalized_relations.append({"from": left, "rel": edge, "to": right})
+
+        relation_labels = {str(rel.get("rel", "")).lower() for rel in normalized_relations}
+        category = "environment_scan"
+        valence = 0.1
+        intensity = 0.28 + (motion_level * 0.18)
+        if "threat" in relation_labels or motion_level > 0.9:
+            category = "threat_detected"
+            valence = -0.8
+            intensity = max(0.8, 0.65 + motion_level * 0.2)
+        elif "face" in objects and confidence >= 0.75:
+            category = "face_recognized"
+            valence = 0.5
+            intensity = 0.42 + (motion_level * 0.2)
+        elif "face" in objects:
+            category = "face_unknown"
+            valence = 0.2
+            intensity = 0.5 + (motion_level * 0.18)
+
+        if category == "threat_detected":
+            relations_for_scene = [r for r in normalized_relations if r.get("rel") != "threat"]
+            unique_objects = []
+            for obj in objects:
+                if obj not in unique_objects:
+                    unique_objects.append(obj)
+            if len(unique_objects) >= 2:
+                relations_for_scene.append(
+                    {
+                        "from": unique_objects[0],
+                        "rel": "threat",
+                        "to": unique_objects[1],
+                    }
+                )
+        else:
+            relations_for_scene = [r for r in normalized_relations if r.get("rel") != "threat"]
+
+        rel_descriptions = []
+        for rel in relations_for_scene:
             left = self._normalize_token(str(rel.get("from", "")))
             edge = self._normalize_token(str(rel.get("rel", "")))
             right = self._normalize_token(str(rel.get("to", "")))
@@ -523,19 +766,22 @@ class VirtualBrain:
         parts.append(f"confidence={confidence:.2f}")
         scene_text = " | ".join(parts)
 
-        self.observe_perception(modality="vision", content=scene_text, source=source)
-
-        # Add small affective modulation from visual dynamics/confidence.
-        dynamic_boost = motion_level * 0.8
-        ambiguity_stress = (1.0 - confidence) * 1.2
-        self.inject_event(
-            effects={
-                "dopamine": dynamic_boost,
-                "cortisol": ambiguity_stress,
-            },
-            event_type="vision_signal",
-            source=source,
-            tags=["vision", "structured_signal"],
+        self.perceive(
+            {
+                "modality": "vision",
+                "content": scene_text,
+                "category": category,
+                "source": source,
+                "valence": valence,
+                "intensity": max(0.2, min(0.95, intensity)),
+                "timestamp": time.time(),
+                "scene": {
+                    "objects": objects,
+                    "attributes": attributes,
+                    "relations": relations_for_scene,
+                    "confidence": confidence,
+                },
+            }
         )
 
     def receive_hearing_signal(self, signal: Any) -> None:
@@ -563,35 +809,69 @@ class VirtualBrain:
         sentiment = max(-1.0, min(1.0, sentiment))
         prosody_intensity = max(0.0, min(1.0, prosody_intensity))
 
+        text_lower = transcript.lower()
+        if "why did you do that" in text_lower and "accountability" not in keywords:
+            keywords.append("accountability")
+        category = "speech_detected"
+        valence = 0.2
+        intensity = 0.3 + (prosody_intensity * 0.25)
+        if not transcript.strip() or "silence" in keywords:
+            category = "boredom"
+            valence = -0.2
+            intensity = 0.22
+        elif "loud_noise" in keywords or "bang" in text_lower or "alarm" in text_lower:
+            category = "loud_noise"
+            valence = -0.4
+            intensity = max(0.75, prosody_intensity)
+        elif speaker_type in {"caregiver", "teacher", "peer"}:
+            category = "voice_recognized"
+            valence = self._voice_valence_from_keywords(keywords)
+            intensity = 0.35 + (prosody_intensity * 0.25)
+
+        salience = 0.4 if {"accountability", "confrontation"} & set(keywords) else abs(valence)
+
         hearing_text = (
-            f"speaker={speaker_type} | text={transcript} | "
+            f"speaker={speaker_type} | text={transcript if transcript else 'silence'} | "
             f"sentiment={sentiment:.2f} | prosody={prosody_intensity:.2f} | "
             f"keywords={','.join(keywords)}"
         )
 
-        self.observe_perception(modality="hearing", content=hearing_text, source=source)
-
-        positive = max(0.0, sentiment)
-        negative = max(0.0, -sentiment)
-        social_bonus = 0.4 if speaker_type in {"caregiver", "teacher", "peer"} else 0.2
-        empathy_keywords = {"praise", "support", "collaboration", "greeted", "social"}
-        stress_keywords = {"criticism", "ignored", "lonely", "threat"}
-
-        keyword_boost = sum(0.15 for k in keywords if k in empathy_keywords)
-        keyword_stress = sum(0.2 for k in keywords if k in stress_keywords)
-
-        effects = {
-            "oxytocin": (social_bonus + 3.0 * positive + keyword_boost) * prosody_intensity,
-            "dopamine": (1.0 + 2.0 * positive + keyword_boost) * prosody_intensity,
-            "serotonin": (0.8 + 2.2 * positive) * prosody_intensity,
-            "cortisol": (0.5 + 3.0 * negative + keyword_stress) * prosody_intensity,
-        }
-        self.inject_event(
-            effects=effects,
-            event_type="hearing_signal",
-            source=source,
-            tags=["hearing", "structured_signal", speaker_type],
+        self.perceive(
+            {
+                "modality": "hearing",
+                "content": hearing_text,
+                "category": category,
+                "source": source,
+                "valence": valence,
+                "intensity": max(0.2, min(0.95, intensity)),
+                "timestamp": time.time(),
+                "scene": {
+                    "speaker_type": speaker_type,
+                    "keywords": keywords,
+                    "prosody_intensity": prosody_intensity,
+                    "sentiment": sentiment,
+                    "salience": salience,
+                },
+            }
         )
+
+    def _voice_valence_from_keywords(self, keywords: list[str] | set[str]) -> float:
+        keyword_set = {str(k).strip().lower() for k in (keywords or []) if str(k).strip()}
+        if "accountability" in keyword_set or "confrontation" in keyword_set:
+            return -0.2
+        if "criticism" in keyword_set:
+            return -0.5
+        if "lonely" in keyword_set or "ignored" in keyword_set:
+            return -0.4
+        if "question" in keyword_set:
+            return 0.0
+        if {"praise", "support", "effort"} & keyword_set:
+            return 0.5
+        if "collaboration" in keyword_set:
+            return 0.3
+        if {"social", "greeted"} & keyword_set:
+            return 0.4
+        return 0.1
 
     def _normalize_token(self, token: str) -> str:
         base = token.lower().strip()
@@ -605,9 +885,16 @@ class VirtualBrain:
             base = base[:-1]
         return self.concept_aliases.get(base, base)
 
-    def _analyze_perception(self, modality: str, content: str) -> dict:
+    def _analyze_perception(
+        self,
+        modality: str,
+        content: str,
+        valence: float = 0.0,
+        provided_scene: dict | None = None,
+    ) -> dict:
         text = (content or "").lower()
         tokens = [self._normalize_token(t) for t in re.findall(r"[a-zA-Z]+", text)]
+        provided_scene = provided_scene or {}
 
         entity_vocab = {
             "person", "cat", "dog", "hand", "fingers", "face", "eyes",
@@ -622,6 +909,9 @@ class VirtualBrain:
 
         entities = [t for t in tokens if t in entity_vocab]
         attributes = [t for t in tokens if t in attribute_vocab]
+        entities.extend([self._normalize_token(x) for x in provided_scene.get("objects", []) if self._normalize_token(x)])
+        for attrs in provided_scene.get("attributes", {}).values():
+            attributes.extend([self._normalize_token(a) for a in attrs if self._normalize_token(a)])
 
         relations = []
         for i, tok in enumerate(tokens):
@@ -630,14 +920,31 @@ class VirtualBrain:
                 right = tokens[i + 1]
                 if left in entity_vocab and right in entity_vocab:
                     relations.append({"from": left, "rel": tok, "to": right})
+        for rel in provided_scene.get("relations", []):
+            left = self._normalize_token(str(rel.get("from", "")))
+            edge = self._normalize_token(str(rel.get("rel", "")))
+            right = self._normalize_token(str(rel.get("to", "")))
+            if left and edge and right:
+                relations.append({"from": left, "rel": edge, "to": right})
 
-        known_concepts = set(self.concept_memory.keys())
-        novelty_hits = [c for c in set(entities + attributes) if c not in known_concepts]
-        novelty = 0.0 if not tokens else min(1.0, len(novelty_hits) / max(1, len(set(tokens))))
+        fingerprint = f"{modality}:{' '.join([t for t in tokens if t])}".strip()
+        seen_count = self._scene_counts.get(fingerprint, 0)
+        novelty = 0.8 if seen_count == 0 else max(0.02, 0.8 / (seen_count + 1))
+        self._scene_counts[fingerprint] = seen_count + 1
 
-        salience = min(1.0, (len(set(entities)) * 0.25) + (len(relations) * 0.2) + (len(set(attributes)) * 0.1))
-        task_relevance = min(1.0, 0.3 if "person" in entities else 0.0 + (0.2 if "camera" in entities else 0.0))
-        confidence = min(1.0, 0.4 + 0.1 * len(entities) + 0.1 * len(relations))
+        salience_structural = min(
+            1.0,
+            (len(set(entities)) * 0.2) + (len(relations) * 0.15) + (len(set(attributes)) * 0.1),
+        )
+        salience = max(abs(valence), salience_structural, float(provided_scene.get("salience", 0.0)))
+        task_relevance = min(1.0, (0.3 if "person" in entities else 0.0) + (0.2 if "camera" in entities else 0.0))
+        confidence = min(
+            1.0,
+            max(
+                float(provided_scene.get("confidence", 0.0)),
+                0.4 + 0.1 * len(set(entities)) + 0.1 * len(relations),
+            ),
+        )
 
         summary_parts = []
         if entities:
@@ -655,7 +962,7 @@ class VirtualBrain:
             "entities": sorted(set(entities)),
             "attributes": sorted(set(attributes)),
             "relations": relations,
-            "novelty": novelty,
+            "novelty": float(provided_scene.get("novelty", novelty)),
             "salience": salience,
             "task_relevance": task_relevance,
             "confidence": confidence,
@@ -683,7 +990,6 @@ class VirtualBrain:
 
         now_step = self.step_counter
         stage_rate = {
-            "baby": 0.05,
             "child": 0.07,
             "teen": 0.09,
             "adult": 0.11,
@@ -726,11 +1032,9 @@ class VirtualBrain:
         m = self.development.maturity
         e = self.experience
 
-        if m < 0.25 and e < 0.8:
-            return "baby"
-        if m < 0.5 and e < 2.5:
+        if m < 0.45 and e < 3.0:
             return "child"
-        if m < 0.75 and e < 5.0:
+        if m < 0.78 and e < 8.0:
             return "teen"
         return "adult"
 
@@ -766,7 +1070,7 @@ class VirtualBrain:
         fatigue = state.get("fatigue", 0.0)
         cortisol = state.get("cortisol", 50.0)
         oxytocin = state.get("oxytocin", 50.0)
-        stage = state.get("development_stage", "baby")
+        stage = state.get("development_stage", "child")
 
         if fatigue > 0.7 or cortisol > 70:
             parts = controlled.split(".")
@@ -774,12 +1078,7 @@ class VirtualBrain:
             if not controlled.endswith((".", "!", "?")):
                 controlled += "."
 
-        if stage == "baby":
-            words = controlled.split()
-            controlled = " ".join(words[:18]).strip()
-            if controlled and not controlled.endswith((".", "!", "?")):
-                controlled += "."
-        elif stage == "child":
+        if stage == "child":
             words = controlled.split()
             controlled = " ".join(words[:28]).strip()
             if controlled and not controlled.endswith((".", "!", "?")):
@@ -826,10 +1125,12 @@ class VirtualBrain:
 
     def _update_resilience(self):
         cortisol = self.chemicals.get("cortisol", {}).get("value", 0)
+        dopamine = self.chemicals.get("dopamine", {}).get("value", 0)
 
         if cortisol > self.stress_threshold:
             self.stress_accumulator += 1
             self.recovery_counter = 0
+            self.complacency_counter = 0
         else:
             self.recovery_counter += 1
 
@@ -838,14 +1139,41 @@ class VirtualBrain:
             self.stress_accumulator = 0
 
         if cortisol > self.burnout_threshold:
-            self.identity.add_evidence("resilience", -self.resilience_damage_rate)
+            # Adversity hardening under sustained stress.
+            self.identity.add_evidence("resilience", self.resilience_damage_rate * 0.5)
+
+        if cortisol < 55 and dopamine > 62:
+            self.complacency_counter += 1
+        else:
+            self.complacency_counter = 0
+
+        if self.complacency_counter >= 40:
+            self.identity.add_evidence("resilience", -0.02)
+            self.complacency_counter = 0
+
+        # Passive recovery so resilience does not bleed over long runs.
+        if hasattr(self.identity, "traits") and "resilience" in self.identity.traits:
+            self.identity.traits["resilience"] = round(
+                max(0.2, min(1.0, self.identity.traits["resilience"] + 0.001)),
+                4,
+            )
 
     def _apply_homeostasis(self):
-        for data in self.chemicals.values():
+        for chem_name, data in self.chemicals.items():
             current = data["value"]
-            baseline = data["baseline"]
-            decay = data["decay"]
-            data["value"] = current + (baseline - current) * decay
+            target = float(data.get("baseline", self.homeostasis_target))
+            decay = max(data["decay"], self.homeostasis_rate)
+            distance = target - current
+            distance_scale = 0.25 + 0.75 * min(1.0, abs(distance) / 30.0)
+            delta = distance * decay * distance_scale
+            delta = max(-self.homeostasis_max_delta, min(self.homeostasis_max_delta, delta))
+
+            if chem_name == "cortisol" and current > target:
+                extra_decay = min(0.8, (current - target) * 0.04)
+                delta -= extra_decay
+                delta = max(-2.0, delta)
+
+            data["value"] = current + delta
 
     def _apply_noise(self):
         if self.deterministic:
@@ -874,17 +1202,30 @@ class VirtualBrain:
     def _apply_decision_feedback(self, feedback: dict):
         for chem, delta in feedback.items():
             if chem in self.chemicals:
-                self.chemicals[chem]["value"] += delta * self.feedback_multiplier
+                bounded = max(-6.0, min(6.0, delta * self.feedback_multiplier))
+                self.chemicals[chem]["value"] += self._saturation_scaled_delta(chem, bounded)
 
     def _clamp(self):
-        for data in self.chemicals.values():
+        for chem_name, data in self.chemicals.items():
             data["value"] = max(data["min"], min(data["value"], data["max"]))
+            if chem_name == "cortisol":
+                data["value"] = min(100.0, data["value"])
 
     def _encode_autobiography(self):
         self.autobiography.record_event(
             description="cycle_step",
             chemicals={k: v["value"] for k, v in self.chemicals.items()},
             identity_snapshot=self.identity.get_snapshot(),
+        )
+        self.memory_manager.create_memory(
+            memory_type="autobiography_cycle",
+            content={
+                "description": "cycle_step",
+                "chemicals": {k: v["value"] for k, v in self.chemicals.items()},
+                "identity": self.identity.get_snapshot(),
+                "step_counter": self.step_counter,
+            },
+            metadata={"source": "brain_tick"},
         )
         self.autobiography.propose_memory_thought(self)
 
@@ -918,24 +1259,144 @@ class VirtualBrain:
         return max(0.15, min(2.2, latency))
 
     def get_state(self):
-        self.development_stage = self._compute_development_stage()
+        chemical_values = {name: data["value"] for name, data in self.chemicals.items()}
+        identity_snapshot = self.identity.get_snapshot()
+        development_snapshot = self.development.get_snapshot()
+        narrative = self.narrative_engine.get_current_narrative()
+        wisdom = self.self_reflection.get_wisdom()
+        consciousness_score = getattr(self.consciousness, "score", 0.0)
 
-        state = {name: data["value"] for name, data in self.chemicals.items()}
-        state.update({f"identity_{k}": v for k, v in self.identity.get_snapshot().items()})
-        state.update({f"development_{k}": v for k, v in self.development.get_snapshot().items()})
+        state = {}
+        state.update(chemical_values)
+        state.update({f"identity_{k}": v for k, v in identity_snapshot.items()})
+        state.update({f"development_{k}": v for k, v in development_snapshot.items()})
+
         state.update(
             {
+                # Full nested payload for persistence
+                "neurochemicals": chemical_values,
+                "identity_traits": identity_snapshot,
+                "development_stage": self.development_stage,
+                "experience_points": self.development.experience_points,
+                "maturity": self.development.maturity,
+                "wisdom": wisdom,
+                "intelligence": self.intelligence,
+                "experience": self.experience,
+                "self_narrative": narrative,
+                "learned_concepts": self.get_top_concepts(8),
+                "concept_memory": self.concept_memory,
+                "consciousness_score": consciousness_score,
+                "recent_perceptions": list(self.recent_perceptions),
+                "reflection_depth": self.development.reflection_depth,
+                "autobiographical_memory": list(self.autobiography.events),
+                "step_counter": self.step_counter,
+                "perceptions_since_reflection": self.perceptions_since_reflection,
                 "fatigue": self.fatigue,
-                "self_narrative": self.narrative_engine.get_current_narrative(),
-                "wisdom": self.self_reflection.get_wisdom(),
             }
         )
 
-        state["intelligence"] = self.intelligence
-        state["experience"] = self.experience
-        state["development_stage"] = self.development_stage
-        state["recent_perceptions"] = list(self.recent_perceptions)[-5:]
-        state["learned_concepts"] = self.get_top_concepts(8)
-        state["consciousness_score"] = getattr(self.consciousness, "score", 0.0)
-
         return state
+
+    def set_state(self, state_dict):
+        if not isinstance(state_dict, dict):
+            return
+
+        neurochemicals = state_dict.get("neurochemicals")
+        if not isinstance(neurochemicals, dict):
+            neurochemicals = {
+                name: state_dict.get(name)
+                for name in self.chemicals.keys()
+                if isinstance(state_dict.get(name), (int, float))
+            }
+
+        for chem, value in neurochemicals.items():
+            if chem in self.chemicals and isinstance(value, (int, float)):
+                self.chemicals[chem]["value"] = float(value)
+
+        identity_traits = state_dict.get("identity_traits")
+        if not isinstance(identity_traits, dict):
+            identity_traits = {
+                trait: state_dict.get(f"identity_{trait}")
+                for trait in self.identity.traits.keys()
+                if isinstance(state_dict.get(f"identity_{trait}"), (int, float))
+            }
+
+        for trait, value in identity_traits.items():
+            if trait in self.identity.traits and isinstance(value, (int, float)):
+                self.identity.traits[trait] = round(max(0.0, min(1.0, float(value))), 4)
+
+        if isinstance(state_dict.get("development_stage"), str):
+            self.development_stage = state_dict["development_stage"]
+
+        experience_points = state_dict.get(
+            "experience_points",
+            state_dict.get("development_experience_points"),
+        )
+        if isinstance(experience_points, (int, float)):
+            self.development.experience_points = float(experience_points)
+
+        maturity = state_dict.get("maturity", state_dict.get("development_maturity"))
+        if isinstance(maturity, (int, float)):
+            self.development.maturity = max(0.0, min(1.0, float(maturity)))
+
+        reflection_depth = state_dict.get(
+            "reflection_depth",
+            state_dict.get("development_reflection_depth"),
+        )
+        if isinstance(reflection_depth, (int, float)):
+            self.development.reflection_depth = max(0.0, float(reflection_depth))
+
+        intelligence = state_dict.get("intelligence")
+        if isinstance(intelligence, (int, float)):
+            self.intelligence = max(0.0, min(1.0, float(intelligence)))
+
+        experience = state_dict.get("experience")
+        if isinstance(experience, (int, float)):
+            self.experience = max(0.0, float(experience))
+
+        wisdom = state_dict.get("wisdom")
+        if isinstance(wisdom, (int, float)):
+            wisdom_value = max(0.0, min(1.0, float(wisdom)))
+            self.wisdom = wisdom_value
+            self.self_reflection.wisdom = wisdom_value
+
+        narrative = state_dict.get("self_narrative")
+        if isinstance(narrative, str) and narrative.strip():
+            self.narrative_engine.current_narrative = narrative
+
+        recent_perceptions = state_dict.get("recent_perceptions")
+        if isinstance(recent_perceptions, list):
+            self.recent_perceptions = deque(
+                recent_perceptions[-self.recent_perceptions.maxlen:],
+                maxlen=self.recent_perceptions.maxlen,
+            )
+
+        concept_memory = state_dict.get("concept_memory")
+        if isinstance(concept_memory, dict):
+            self.concept_memory = concept_memory
+
+        autobiographical_memory = state_dict.get("autobiographical_memory")
+        if isinstance(autobiographical_memory, list):
+            self.autobiography.events = deque(
+                autobiographical_memory[-self.autobiography.events.maxlen:],
+                maxlen=self.autobiography.events.maxlen,
+            )
+
+        consciousness_score = state_dict.get("consciousness_score")
+        if isinstance(consciousness_score, (int, float)):
+            self.consciousness.score = max(0.0, min(1.0, float(consciousness_score)))
+
+        fatigue = state_dict.get("fatigue")
+        if isinstance(fatigue, (int, float)):
+            self.fatigue = max(0.0, min(1.0, float(fatigue)))
+
+        step_counter = state_dict.get("step_counter")
+        if isinstance(step_counter, (int, float)):
+            self.step_counter = max(0, int(step_counter))
+
+        perception_counter = state_dict.get("perceptions_since_reflection")
+        if isinstance(perception_counter, (int, float)):
+            self.perceptions_since_reflection = max(0, int(perception_counter))
+
+        self._clamp()
+        self._enforce_identity_floors()
