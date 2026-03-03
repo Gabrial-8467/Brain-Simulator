@@ -128,7 +128,7 @@ class SyntheticEnvironment:
                 "speaker_type": "ambient",
                 "sentiment": -0.4,
                 "keywords": ["loud_noise"],
-                "weight": 0.08,
+                "weight": 0.04,
             },
         ]
         self.category_default_novelty = {
@@ -184,6 +184,17 @@ class SyntheticEnvironment:
         novelty = max(0.05, novelty)
         self.event_exposure_counts[event_key] = exposure + 1
         return novelty
+
+    def _estimate_novelty(self, category: str, content: str, base_novelty: float | None = None) -> float:
+        base = (
+            float(base_novelty)
+            if base_novelty is not None
+            else float(self.category_default_novelty.get(category, 0.4))
+        )
+        event_key = f"{category}|{(content or '').strip().lower()}"
+        exposure = self.event_exposure_counts.get(event_key, 0)
+        novelty = base * (0.5 ** (exposure / 10.0))
+        return max(0.05, novelty)
 
     def generate_event(self) -> PerceptionEvent:
         self._step_counter += 1
@@ -317,7 +328,19 @@ class SyntheticEnvironment:
                 for sample in candidates
                 if "loud_noise" not in {k.lower() for k in sample.get("keywords", [])}
             ]
-        weights = [float(sample.get("weight", 0.1)) for sample in candidates]
+        weights = []
+        for sample in candidates:
+            weight = float(sample.get("weight", 0.1))
+            sample_keywords = {k.lower() for k in sample.get("keywords", [])}
+            if "loud_noise" in sample_keywords:
+                loud_novelty = self._estimate_novelty(
+                    category="loud_noise",
+                    content=str(sample.get("transcript", "")).strip() or "silence",
+                    base_novelty=self.category_default_novelty.get("loud_noise", 0.8),
+                )
+                if loud_novelty < 0.3:
+                    weight *= 0.5
+            weights.append(weight)
         sample = self._rng.choices(candidates, weights=weights, k=1)[0]
         transcript = sample["transcript"]
         speaker_type = sample["speaker_type"]

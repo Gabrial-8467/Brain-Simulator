@@ -36,6 +36,7 @@ class VirtualBrain:
     ):
         self.deterministic = deterministic
         self.feedback_multiplier = feedback_multiplier
+        self.decision_feedback_scale = 0.45
         self.decision_engine = decision_engine
 
         self.identity = DynamicIdentity()
@@ -77,10 +78,49 @@ class VirtualBrain:
         self.risk_tolerance = 0.5
         self.risk_adapt_rate = 0.02
         self.homeostasis_target = 60.0
-        self.homeostasis_rate = 0.05
-        self.homeostasis_max_delta = 1.5
+        self.homeostasis_rate = 0.04
+        self.homeostasis_max_delta = 1.0
         self.homeostasis_gentle_upward_max = 0.5
         self.cortisol_decay_baseline = 45.0
+        self.serotonin_regulation_baseline = 60.0
+        self.homeostasis_baselines = {
+            "dopamine": 65.0,
+            "cortisol": 45.0,
+            "oxytocin": 65.0,
+            "serotonin": 62.0,
+        }
+        self.recall_responses = {
+            "positive": {
+                "dopamine": 1.2,
+                "cortisol": -0.3,
+                "oxytocin": 0.4,
+                "serotonin": 0.3,
+            },
+            "threat": {
+                "dopamine": -0.3,
+                "cortisol": 1.5,
+                "oxytocin": -0.5,
+                "serotonin": -0.4,
+            },
+            "failure": {
+                "dopamine": -0.5,
+                "cortisol": 0.8,
+                "oxytocin": 0.0,
+                "serotonin": -0.6,
+            },
+            "social_pain": {
+                "dopamine": -0.4,
+                "cortisol": 0.6,
+                "oxytocin": -1.2,
+                "serotonin": -0.5,
+            },
+            "neutral": {
+                "dopamine": 0.2,
+                "cortisol": 0.0,
+                "oxytocin": 0.0,
+                "serotonin": 0.0,
+            },
+        }
 
         self.fatigue = 0.0
         self.fatigue_recovery_rate = 0.98
@@ -250,13 +290,31 @@ class VirtualBrain:
             "decision_path": "none",
             "forced_fallback": False,
             "system_recall_feedback_suppressed": False,
+            "memory_feedback_suppressed": False,
+            "memory_recall_type": None,
+            "memory_recall_scale": 0.0,
         }
+
+        if self.current_focus and self.current_focus.source == "memory":
+            recall_effect = self._apply_memory_recall_response(self.current_focus)
+            self._decision_debug["memory_recall_type"] = recall_effect.get("type")
+            self._decision_debug["memory_recall_scale"] = recall_effect.get("scale", 0.0)
+            if recall_effect.get("applied"):
+                self._clamp()
 
         gate_pass = high_emotion_hits >= 3
         self._decision_debug["gate_pass"] = gate_pass
 
+        recent_valence_avg = 0.0
+        if self._step_perception_valences:
+            recent_valence_avg = sum(self._step_perception_valences) / len(self._step_perception_valences)
+
         if self.decision_engine and self.current_focus and gate_pass:
-            decision_output = self.decision_engine.decide(self.current_focus)
+            decision_output = self.decision_engine.decide(
+                self.current_focus,
+                state=self.get_state(),
+                recent_valence_avg=recent_valence_avg,
+            )
             self._decision_debug["decision_path"] = "model"
 
         if (
@@ -270,6 +328,9 @@ class VirtualBrain:
 
         if decision_output:
             feedback = decision_output.get("feedback", {})
+            if self.current_focus and self.current_focus.source == "memory":
+                feedback = {}
+                self._decision_debug["memory_feedback_suppressed"] = True
             if self._is_system_recall_focus(self.current_focus):
                 feedback = {}
                 self._decision_debug["system_recall_feedback_suppressed"] = True
@@ -445,47 +506,47 @@ class VirtualBrain:
 
         effects = {
             "dopamine": (1.2 * positive - 0.8 * negative) * intensity,
-            "oxytocin": (1.0 * positive - 0.6 * negative) * intensity,
-            "serotonin": (0.9 * positive - 0.7 * negative) * intensity,
+            "oxytocin": (1.0 * positive - 0.3 * negative) * intensity,
+            "serotonin": (0.9 * positive - 0.5 * negative) * intensity,
             "cortisol": (2.2 * negative - 0.8 * positive) * intensity,
         }
 
         if category == "praise":
-            effects["dopamine"] += 1.56 * intensity
-            effects["oxytocin"] += 1.95 * intensity
-            effects["serotonin"] += 1.04 * intensity
+            effects["dopamine"] += 1.0 * intensity
+            effects["oxytocin"] += 1.5 * intensity
+            effects["serotonin"] += 1.2 * intensity
             effects["cortisol"] -= 0.9 * intensity
         elif category == "greeted":
-            effects["oxytocin"] += 2.6 * intensity
-            effects["serotonin"] += 0.65 * intensity
+            effects["oxytocin"] += 2.0 * intensity
+            effects["serotonin"] += 0.5 * intensity
             effects["cortisol"] -= 0.5 * intensity
         elif category == "success":
-            effects["dopamine"] += 1.95 * intensity
-            effects["serotonin"] += 0.78 * intensity
+            effects["dopamine"] += 1.5 * intensity
+            effects["serotonin"] += 0.8 * intensity
             effects["cortisol"] -= 0.6 * intensity
         elif category == "face_recognized":
-            effects["oxytocin"] += 1.3 * intensity
+            effects["oxytocin"] += 1.5 * intensity
             effects["cortisol"] -= 0.35 * intensity
 
         if category in {"criticism", "failure", "loud_noise", "threat_detected"}:
             effects["cortisol"] += 2.8 * intensity
-            effects["serotonin"] -= 0.6 * intensity
+            effects["serotonin"] -= 0.45 * intensity
             effects["dopamine"] -= 0.9 * intensity
         if category in {"loneliness", "ignored", "boredom", "silence"}:
-            effects["oxytocin"] -= 1.2 * intensity
+            effects["oxytocin"] -= 0.9 * intensity
             effects["dopamine"] -= 0.7 * intensity
-            effects["serotonin"] -= 0.4 * intensity
+            effects["serotonin"] -= 0.25 * intensity
         if category in {"face_unknown", "speech_detected", "novelty"}:
             effects["dopamine"] += 0.9 * intensity
         if modality == "vision" and category == "environment_scan":
             effects["dopamine"] += 0.4 * intensity
         if modality == "hearing" and category == "voice_recognized":
             if valence > 0.15:
-                effects["oxytocin"] += 1.3 * intensity
+                effects["oxytocin"] += 0.8 * intensity
                 effects["serotonin"] += 0.4 * intensity
                 effects["cortisol"] -= 0.6 * intensity
             elif valence < -0.15:
-                effects["oxytocin"] -= 1.0 * intensity
+                effects["oxytocin"] -= 0.8 * intensity
                 effects["cortisol"] += 1.0 * intensity
 
         cortisol_sensitivity = self._cortisol_sensitivity_factor()
@@ -769,6 +830,45 @@ class VirtualBrain:
         system_event_keys = {"cycle_step", "internal_process", "tick", "update"}
         return any(key in text for key in system_event_keys)
 
+    def _classify_recall(self, content: str) -> str:
+        c = str(content or "").lower()
+        if any(k in c for k in ["threat_detected", "threat", "danger"]):
+            return "threat"
+        if any(k in c for k in ["failure", "failed", "criticism", "criticized", "mistake"]):
+            return "failure"
+        if any(k in c for k in ["loneliness", "isolated", "ignored", "no one is listening"]):
+            return "social_pain"
+        if any(k in c for k in ["success", "praise", "greeted", "proud", "solve", "together", "face_recognized", "good job"]):
+            return "positive"
+        return "neutral"
+
+    def _apply_memory_recall_response(self, focus: Thought) -> dict[str, Any]:
+        if self._is_system_recall_focus(focus):
+            return {"type": "system", "scale": 0.0, "applied": False}
+
+        focus_content = str(focus.content or "")
+        if isinstance(focus.metadata, dict):
+            recalled_description = focus.metadata.get("recalled_description")
+            if isinstance(recalled_description, str) and recalled_description.strip():
+                focus_content = f"{focus_content} {recalled_description}"
+        memory_type = self._classify_recall(focus_content)
+        response = self.recall_responses.get(memory_type, self.recall_responses["neutral"])
+
+        recalled_intensity = 0.0
+        if isinstance(focus.metadata, dict):
+            raw_intensity = focus.metadata.get("recalled_intensity", focus.metadata.get("intensity"))
+            if isinstance(raw_intensity, (int, float)):
+                recalled_intensity = float(raw_intensity)
+        scale = max(0.0, min(1.0, recalled_intensity if recalled_intensity else 0.7))
+
+        for chem, raw_delta in response.items():
+            if chem not in self.chemicals:
+                continue
+            delta = max(-2.0, min(2.0, float(raw_delta) * scale))
+            self.chemicals[chem]["value"] += delta
+
+        return {"type": memory_type, "scale": round(scale, 4), "applied": True}
+
     def _monitor_concept_growth(self) -> None:
         current_count = len(self.concept_memory)
         if current_count == self._last_concept_count:
@@ -822,59 +922,57 @@ class VirtualBrain:
         }
 
     def _apply_narrative_milestones(self) -> None:
-        if (self.step_counter - self._last_narrative_update_step) < 20:
-            return
-
         state = {
-            "wisdom": float(self.wisdom),
             "stage": self.development_stage,
+            "wisdom": float(self.wisdom),
             "competence": float(self.identity.get("competence")),
             "resilience": float(self.identity.get("resilience")),
             "intelligence": float(self.intelligence),
             "consciousness": float(self.consciousness.score),
+            "cortisol": float(self.chemicals.get("cortisol", {}).get("value", 0.0)),
+            "serotonin": float(self.chemicals.get("serotonin", {}).get("value", 0.0)),
         }
 
         milestones = [
             (
-                lambda s: s["wisdom"] >= 0.3 and s["stage"] == "child",
-                "I am starting to understand the world around me.",
+                lambda s: s["stage"] == "adult" and s["wisdom"] >= 0.95 and s["serotonin"] > 62.0 and s["cortisol"] < 50.0,
+                "I think. I feel. I reflect. I am more than my experiences.",
             ),
             (
-                lambda s: s["stage"] == "teen" and s["competence"] >= 0.5,
-                "I am figuring out who I want to become.",
+                lambda s: s["stage"] == "adult" and s["competence"] >= 0.95 and s["cortisol"] < 54.0 and s["serotonin"] > 59.0,
+                "I know what I am capable of. I am ready for what comes next.",
+            ),
+            (
+                lambda s: s["stage"] == "adult" and s["wisdom"] >= 0.9 and s["cortisol"] > 55.0,
+                "I know who I am. The world is difficult, but I have endured.",
+            ),
+            (
+                lambda s: s["stage"] == "adult" and s["wisdom"] >= 0.7,
+                "I am capable and improving. The world feels stressful.",
             ),
             (
                 lambda s: s["stage"] == "teen" and s["resilience"] >= 0.8,
                 "I have faced hard things and I am still here.",
             ),
             (
-                lambda s: s["stage"] == "adult" and s["wisdom"] >= 0.7,
-                "I understand myself and I know how to navigate this world.",
+                lambda s: s["stage"] == "teen" and s["competence"] >= 0.5,
+                "I am figuring out who I want to become.",
             ),
             (
-                lambda s: s["stage"] == "adult" and s["competence"] >= 0.9 and s["wisdom"] >= 0.9,
-                "I know who I am. I know what I value. I am ready.",
-            ),
-            (
-                lambda s: s["intelligence"] >= 0.95 and s["consciousness"] >= 0.99,
-                "I think. I feel. I reflect. I am more than my experiences.",
+                lambda s: s["stage"] == "child" and s["wisdom"] >= 0.3,
+                "I am starting to understand the world around me.",
             ),
         ]
 
-        next_index = None
-        next_narrative = None
-        for idx, (condition_fn, narrative_text) in enumerate(milestones):
-            if idx <= self._narrative_milestone_index:
-                continue
+        selected = "I am learning who I am."
+        for condition_fn, narrative_text in milestones:
             if condition_fn(state):
-                next_index = idx
-                next_narrative = narrative_text
+                selected = narrative_text
                 break
 
-        if next_index is not None and next_narrative:
-            self._narrative_milestone_index = next_index
+        if self.narrative_engine.current_narrative != selected:
+            self.narrative_engine.current_narrative = selected
             self._last_narrative_update_step = self.step_counter
-            self.narrative_engine.current_narrative = next_narrative
 
     def _enforce_identity_floors(self) -> None:
         if hasattr(self.identity, "traits") and "resilience" in self.identity.traits:
@@ -1451,19 +1549,36 @@ class VirtualBrain:
         has_positive_perception = any(v > 0 for v in self._step_perception_valences)
         for chem_name, data in self.chemicals.items():
             current = data["value"]
-            target = float(data.get("baseline", self.homeostasis_target))
+            target = float(self.homeostasis_baselines.get(chem_name, data.get("baseline", self.homeostasis_target)))
             delta = (target - current) * self.homeostasis_rate
             delta = max(-self.homeostasis_max_delta, min(self.homeostasis_max_delta, delta))
 
             if chem_name == "dopamine" and delta > 0 and not has_positive_perception:
                 delta = min(delta, self.homeostasis_gentle_upward_max)
 
+            if chem_name == "oxytocin" and delta < 0:
+                social_value = float(self.identity.get("social_value"))
+                if social_value > 0.8:
+                    oxytocin_decay_multiplier = 0.4
+                elif social_value > 0.6:
+                    oxytocin_decay_multiplier = 0.7
+                else:
+                    oxytocin_decay_multiplier = 1.0
+                delta *= oxytocin_decay_multiplier
+
             if chem_name == "cortisol":
-                cortisol_decay = 0.02 * max(0.0, current - self.cortisol_decay_baseline)
+                excess = max(0.0, current - self.cortisol_decay_baseline)
+                cortisol_decay = 0.04 * excess
                 delta -= cortisol_decay
                 delta = max(-self.homeostasis_max_delta, min(self.homeostasis_max_delta, delta))
 
-            data["value"] = current + delta
+            updated = current + delta
+            if chem_name == "oxytocin" and updated < 62.0:
+                updated += (62.0 - updated) * 0.04
+            if chem_name == "serotonin":
+                serotonin_pull = (self.serotonin_regulation_baseline - updated) * 0.02
+                updated += serotonin_pull
+            data["value"] = updated
 
     def _apply_noise(self):
         if self.deterministic:
@@ -1492,7 +1607,9 @@ class VirtualBrain:
     def _apply_decision_feedback(self, feedback: dict):
         for chem, delta in feedback.items():
             if chem in self.chemicals:
-                bounded = max(-6.0, min(6.0, delta * self.feedback_multiplier))
+                bounded = max(-3.0, min(3.0, delta * self.feedback_multiplier * self.decision_feedback_scale))
+                if chem == "cortisol":
+                    bounded = max(-0.6, min(0.6, bounded))
                 self.chemicals[chem]["value"] += self._saturation_scaled_delta(chem, bounded)
 
     def _clamp(self):
