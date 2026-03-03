@@ -1,182 +1,121 @@
-# Virtual Brain Engine - Complete Feature List
+# Virtual Brain Engine - Implemented Feature List
 
-## 🧠 Core Neurochemical System
-- **Four Key Neurochemicals**: Dopamine, Cortisol, Oxytocin, Serotonin
-- **Realistic Baselines**: Dopamine (50), Cortisol (40), Oxytocin (60), Serotonin (55)
-- **Decay Simulation**: Time-based chemical decay with individual rates
-- **Stochastic Noise**: Random fluctuations for realistic variability
-- **Chemical Interactions**: Cross-modulation (e.g., cortisol reduces dopamine)
-- **Value Clamping**: Automatic min/max boundary enforcement
-- **Homeostatic Regulation**: Automatic return to baseline levels
+This file lists features that are currently present in the codebase.
 
-## 🧬 Cognitive Architecture
-- **Dynamic Identity System**: Evolving personality traits (competence, social_value, resilience, intelligence)
-- **Developmental Psychology**: Maturity tracking with experience accumulation
-- **Autobiographical Memory**: Event-based memory with chemical context
-- **Narrative Engine**: Story generation from life experiences
-- **Self-Reflection**: Metacognitive processes and self-awareness
-- **Fatigue System**: Cognitive load and recovery mechanisms
+## 1. Core Brain State
 
-## 🎯 Learning & Adaptation
-- **Appraisal Engine**: Emotional learning with surprise detection
-- **Similarity Engine**: Pattern matching and experience comparison
-- **Abstraction Engine**: Concept formation and generalization
-- **Associative Memory**: Long-term memory with human-like decay patterns
-- **Experience Tracking**: Point-based experience accumulation
-- **Emotional Weighting**: Intensity-based learning significance
+- Four modeled chemicals: dopamine, cortisol, oxytocin, serotonin
+- Per-chemical baseline, decay, noise, min/max clamping
+- Chemical interaction matrix support (`config/chemicals.yaml`)
+- Risk tolerance, fatigue, stress accumulator, recovery counters
 
-## 📊 Decision Making
-- **Decision Engine**: Configurable action selection with probability modeling
-- **Five Core Actions**: Support, Challenge, Suggest, Refuse, Neutral
-- **Chemical Influence**: Neurochemical impact on action probabilities
-- **Action Feedback**: Chemical responses to chosen actions
-- **Personality Integration**: Identity traits affect decision weights
-- **Deterministic Mode**: Reproducible decision testing capability
+## 2. Identity and Development
 
-## 🔮 Strategic Planning
-- **Multi-step Simulation**: Future state prediction (configurable depth)
-- **Counterfactual Reasoning**: Evaluation of alternative outcomes
-- **Risk Aversion**: Dynamic risk tolerance configuration
-- **Goal Alignment**: Decision scoring based on active objectives
-- **Emotional Forecasting**: Predicted emotional responses to actions
-- **Personality Influence**: Competence and resilience impact planning
+- Dynamic identity traits:
+  - competence
+  - social_value
+  - resilience
+  - intelligence
+- Evidence-based trait updates with learning rate
+- Development metrics:
+  - experience_points
+  - emotional_weight
+  - stress_exposure
+  - success_exposure
+  - reflection_depth
+  - maturity
+- Development stage labels: baby, child, teen, adult
 
-## 🤔 Self-Reflection & Wisdom
-- **Regret Calculation**: Analysis of unchosen alternatives
-- **Wisdom Accumulation**: Long-term learning from counterfactual thinking
-- **Profile Blending**: Combining predictions with historical patterns
-- **Maturity Development**: Growth from reflective experiences
-- **Memory Integration**: Past experiences influence future reflection
-- **Volatility Tracking**: Emotional pattern recognition
+## 3. Attention and Consciousness
 
-## 🛡️ Resilience & Stress Management
-- **Stress Accumulation**: Cumulative stress tracking
-- **Burnout Prevention**: Threshold-based intervention system
-- **Recovery Mechanisms**: Automatic stress reduction
-- **Resilience Building**: Experience-based resilience growth
-- **Adaptive Thresholds**: Dynamic stress tolerance adjustment
-- **Recovery Counter**: Tracking healing progress
+- `Thought` model with:
+  - content, source, emotional_weight, novelty, relevance_to_goals, recency, metadata
+- Global Workspace competition:
+  - weighted activation (emotional/novelty/relevance/recency)
+  - current focus and streak tracking
+  - focus stability score
+- Internal spontaneous thought generator (`core/internal_thoughts.py`)
+- Consciousness score from:
+  - focus stability/streak
+  - memory/goal focus bonus
+  - development and reflection bonuses
 
-## 🎭 Developmental Systems
-- **Attachment Modeling**: Social bonding simulation
-- **Goal System**: Goal formation, pursuit, and achievement tracking
-- **Curiosity Engine**: Exploration and learning drives
-- **Maturity Progression**: Developmental stage advancement
-- **Experience Points**: Quantified life experience tracking
-- **Reflection Depth**: Metacognitive capability development
+## 4. Memory and Narrative
 
-## 📚 Memory Systems
-- **Autobiographical Memory**: Personal event storage with context
-- **Associative Memory**: Pattern-based memory retrieval
-- **Context Tracking**: Situational awareness and memory indexing
-- **Emotional Indexing**: Memory tagged with emotional significance
-- **Pattern Recognition**: Recurring situation identification
-- **Human-like Decay**: Realistic forgetting mechanisms
+- Autobiographical memory:
+  - event recording with chemicals, identity snapshot, metadata
+  - recent event retrieval
+  - memory-thought proposal to workspace
+- Narrative engine:
+  - computes narrative from recent event trends
+  - maintains identity bias values with decay
+  - exposes current narrative string
 
-## 🔧 Configuration & Control
-- **YAML Configuration**: Modular parameter management
-- **Chemical Configuration**: Neurochemical behavior customization
-- **Decision Configuration**: Action set and probability tuning
-- **Engine Settings**: Simulation parameters and update orders
-- **Deterministic Mode**: Reproducible simulation runs
-- **Global Multipliers**: System-wide parameter scaling
+## 5. Learning and Reflection
 
-## 🎪 Simulation Features
-- **Scenario Testing**: Predefined learning situations
-- **Structured Learning**: Praise/criticism event patterns
-- **Stress Testing**: High-pressure scenario simulation
-- **Live Mode**: Interactive real-time exploration
-- **Event Injection**: Manual stimulus application
-- **Cycle Control**: Step-by-step simulation advancement
+- Appraisal engine:
+  - emotional prediction per event type
+  - confidence/volatility tracking
+  - emotional learning updates from outcomes
+- Similarity engine:
+  - stores event profiles
+  - finds similar profiles by chemical/identity distance
+  - blended emotional prediction
+- Self reflection:
+  - regret estimation from chosen vs alternative actions
+  - confidence and wisdom updates
+  - reflection thought proposals
+- Periodic reflection step in brain tick:
+  - reviews recent memory
+  - increases reflection depth
+  - increases wisdom
 
-## 📈 Monitoring & Analytics
-- **State Reporting**: Comprehensive brain state snapshots
-- **Chemical Monitoring**: Real-time neurochemical levels
-- **Identity Tracking**: Personality trait evolution
-- **Development Metrics**: Maturity and experience indicators
-- **Wisdom Scoring**: Accumulated insight measurement
-- **Fatigue Tracking**: Cognitive load monitoring
+## 6. Perception Interfaces
 
-## ️ Sensory Perception System
-- **Visual Scene Analysis**: Camera-based brightness detection and scene description
-- **Multi-modal Perception**: Integration of vision, speaking, and other sensory inputs
-- **Concept Memory**: Visual concept learning with strength tracking
-- **Modality Tracking**: First-seen and last-seen timestamps for concepts
-- **Scene Classification**: Dark, normal, and bright scene categorization
-- **Perceptual Events**: Chemical responses to visual and sensory stimuli
+- Generic modality perception:
+  - `observe_perception(modality, content, source)`
+- Experience event perception:
+  - `perceive(event)` with content/category/valence/intensity/source/timestamp
+- Structured vision interface:
+  - `receive_visual_signal(signal)` with objects/attributes/relations/motion/confidence
+- Structured hearing interface:
+  - `receive_hearing_signal(signal)` with transcript/speaker/sentiment/prosody/keywords
+- Perception analysis includes:
+  - token normalization
+  - entities/attributes/relations extraction
+  - novelty/salience/confidence estimates
+  - concept learning with strength and modality/source tracking
 
-## 🎭 Personality & Gender System
-- **Female Gender Identity**: Defined gender characteristics and traits
-- **Feminine Traits**: Nurturing, intuition, empathy, collaboration, expressiveness, protectiveness
-- **Trait-based Behavior**: Personality influences on perception and action
-- **Gender-specific Learning**: Tailored developmental patterns
-- **Social Interaction Modeling**: Gender-aware social behavior simulation
+## 7. Simulation Layer
 
-## 🎛️ Advanced Features
-- **Surprise Detection**: Novelty identification and learning
-- **Volatility Tracking**: Emotional pattern variability
-- **Risk Adaptation**: Dynamic risk tolerance adjustment
-- **Goal Decay**: Time-based objective reduction
-- **Memory Consolidation**: Long-term memory strengthening
-- **Narrative Coherence**: Story consistency maintenance
+- Synthetic environment (`simulation/environment.py`) provides:
+  - lifecycle events (`PerceptionEvent`)
+  - synthetic vision signals (`VisionSignal`)
+  - synthetic hearing signals (`HearingSignal`)
+- Simulator loop:
+  - generates one synthetic event each cycle and calls `brain.perceive(...)`
+  - injects optional scenario events
+  - runs `brain.tick()`
+  - prints state and optional decision output
+- Structured scenario builder (`simulation/scenarios.py`)
 
-## 🔬 Technical Capabilities
-- **Modular Architecture**: Component-based system design
-- **Extensible Framework**: Easy feature addition capability
-- **Debug Mode**: Verbose logging and state inspection
-- **Performance Monitoring**: System efficiency tracking
-- **Error Handling**: Robust failure recovery
-- **Memory Management**: Bounded storage with cleanup
+## 8. Decision Module
 
-## 🌐 External Interaction
-- **Event Injection**: External stimulus integration
-- **State Export**: Brain state data extraction
-- **Configuration Loading**: Runtime parameter updates
-- **Logging System**: Comprehensive activity tracking
-- **CLI Interface**: Command-line operation control
-- **Scenario Building**: Custom situation creation
+- `DecisionEngine` exists and is attention-driven:
+  - input is current focus `Thought`
+  - base probabilities from `ProbabilityModel`
+  - bias from emotional_weight and relevance_to_goals
+  - deterministic or stochastic action selection
+- Action feedback mapping is supported
+- Strategic planner module exists (`decision/strategic_planner.py`)
 
-## 🎨 User Experience
-- **Live Interaction Mode**: Real-time brain exploration
-- **Visual State Display**: Clear system status presentation
-- **Progress Tracking**: Development and learning visualization
-- **Outcome Feedback**: Decision result communication
-- **Narrative Output**: Coherent story generation
-- **Intuitive Configuration**: User-friendly parameter setup
+## 9. CLI and Configuration
 
----
-
-## 🚀 Innovation Highlights
-
-### **Multi-Level Cognitive Architecture**
-- Combines low-level neurochemical simulation with high-level cognitive processes
-- Integrates developmental psychology with decision-making systems
-- Bridges biological modeling with artificial intelligence
-
-### **Adaptive Personality System**
-- Dynamic identity that evolves based on experiences
-- Trait development through evidence accumulation
-- Personality influences on perception and action
-
-### **Counterfactual Intelligence**
-- Regret-based learning from alternative outcomes
-- Wisdom accumulation through reflection
-- Strategic planning with future consequence simulation
-
-### **Biologically-Inspired Learning**
-- Emotional appraisal with surprise detection
-- Similarity-based pattern recognition
-- Human-like memory decay and consolidation
-
-### **Advanced Perception System**
-- Real-time visual scene analysis and classification
-- Multi-modal sensory integration with chemical responses
-- Concept learning through visual perception
-- Camera-based environmental monitoring
-
-### **Resilience Modeling**
-- Stress accumulation and recovery simulation
-- Burnout prevention mechanisms
-- Adaptive threshold adjustment
-
-This comprehensive feature set makes the Virtual Brain Engine a sophisticated simulation of cognitive processes, combining neurobiological realism with advanced artificial intelligence capabilities and sensory perception systems.
+- CLI options in `main.py`:
+  - `--mode` (`simulate`, `live`)
+  - `--cycles`
+  - `--deterministic`
+- Config files:
+  - `config/chemicals.yaml`
+  - `config/decision.yaml`
+  - `config/engine.yaml`
