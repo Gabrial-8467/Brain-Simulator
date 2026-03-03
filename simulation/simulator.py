@@ -159,7 +159,8 @@ class Simulator:
                 f"focus={decision_debug.get('focus_present')} "
                 f"emotional={decision_debug.get('focus_emotional_weight')} "
                 f"threshold={decision_debug.get('emotional_threshold')} "
-                f"streak={decision_debug.get('high_emotion_streak')} "
+                f"hits10={decision_debug.get('high_emotion_hits_last_10')} "
+                f"gate={decision_debug.get('gate_pass')} "
                 f"forced={decision_debug.get('forced_fallback')}"
             )
 

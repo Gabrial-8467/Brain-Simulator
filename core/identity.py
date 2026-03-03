@@ -8,7 +8,7 @@ class DynamicIdentity:
         }
         self.trait_bounds = {
             "competence": (0.0, 1.0),
-            "social_value": (-0.5, 1.0),
+            "social_value": (-0.3, 1.0),
             "resilience": (0.0, 1.0),
             "intelligence": (0.0, 1.0),
         }

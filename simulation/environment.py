@@ -47,15 +47,15 @@ class SyntheticEnvironment:
     """Generate one meaningful developmental life event per cycle."""
 
     EVENT_LIBRARY = [
-        ("greeted", "A caregiver greets you warmly.", 0.6),
-        ("ignored", "Your attempt to connect is ignored.", -0.5),
-        ("praise", "You are praised for trying.", 0.8),
-        ("criticism", "You are criticized for a mistake.", -0.8),
-        ("success", "You solved a small challenge successfully.", 0.9),
-        ("failure", "You failed to solve a challenge.", -0.9),
-        ("novelty", "You encounter something new and unfamiliar.", 0.3),
-        ("boredom", "Nothing changes and stimulation is low.", -0.2),
-        ("loneliness", "You feel socially isolated.", -0.7),
+        ("greeted", "A caregiver is greeting me warmly.", 0.6),
+        ("ignored", "My attempt to connect is being ignored.", -0.5),
+        ("praise", "I am being praised for trying.", 0.8),
+        ("criticism", "I am being criticized for a mistake.", -0.8),
+        ("success", "I solved a small challenge successfully.", 0.9),
+        ("failure", "I failed to solve a challenge.", -0.9),
+        ("novelty", "I encountered something new and unfamiliar.", 0.3),
+        ("boredom", "I feel bored. Nothing is stimulating me.", -0.2),
+        ("loneliness", "I feel socially isolated.", -0.7),
     ]
     LANDMARK_EVENTS = {"praise", "criticism", "success", "failure", "threat_detected"}
 
@@ -67,16 +67,91 @@ class SyntheticEnvironment:
         self._vision_attr_pool = ["red", "blue", "green", "small", "large", "bright", "dark"]
         self._vision_rel_pool = ["near", "behind", "left", "right", "on"]
         self._hearing_samples = [
-            ("I am proud of you", "caregiver", 0.8, ["praise", "support"]),
-            ("Why did you do that?", "caregiver", -0.4, ["question", "accountability"]),
-            ("Good job, keep trying", "teacher", 0.7, ["praise", "effort"]),
-            ("No one is listening", "peer", -0.6, ["ignored", "lonely"]),
-            ("Let us solve it together", "caregiver", 0.6, ["collaboration"]),
-            ("That was a mistake", "teacher", -0.7, ["criticism"]),
-            ("Hello, I am here with you", "caregiver", 0.7, ["greeted", "social"]),
-            ("", "ambient", -0.2, ["silence"]),
-            ("Loud bang from the corridor", "ambient", -0.4, ["loud_noise"]),
+            {
+                "transcript": "I am proud of you",
+                "speaker_type": "caregiver",
+                "sentiment": 0.8,
+                "keywords": ["praise", "support"],
+                "weight": 0.13,
+            },
+            {
+                "transcript": "Why did you do that?",
+                "speaker_type": "caregiver",
+                "sentiment": -0.4,
+                "keywords": ["question", "accountability"],
+                "weight": 0.12,
+            },
+            {
+                "transcript": "Good job, keep trying",
+                "speaker_type": "teacher",
+                "sentiment": 0.7,
+                "keywords": ["praise", "effort"],
+                "weight": 0.13,
+            },
+            {
+                "transcript": "No one is listening",
+                "speaker_type": "peer",
+                "sentiment": -0.6,
+                "keywords": ["ignored", "lonely"],
+                "weight": 0.12,
+            },
+            {
+                "transcript": "Let us solve it together",
+                "speaker_type": "caregiver",
+                "sentiment": 0.6,
+                "keywords": ["collaboration"],
+                "weight": 0.12,
+            },
+            {
+                "transcript": "That was a mistake",
+                "speaker_type": "teacher",
+                "sentiment": -0.7,
+                "keywords": ["criticism"],
+                "weight": 0.12,
+            },
+            {
+                "transcript": "Hello, I am here with you",
+                "speaker_type": "caregiver",
+                "sentiment": 0.7,
+                "keywords": ["greeted", "social"],
+                "weight": 0.11,
+            },
+            {
+                "transcript": "",
+                "speaker_type": "ambient",
+                "sentiment": -0.2,
+                "keywords": ["silence"],
+                "weight": 0.12,
+            },
+            {
+                "transcript": "Loud bang from the corridor",
+                "speaker_type": "ambient",
+                "sentiment": -0.4,
+                "keywords": ["loud_noise"],
+                "weight": 0.08,
+            },
         ]
+        self.category_default_novelty = {
+            "greeted": 0.8,
+            "ignored": 0.8,
+            "praise": 0.8,
+            "criticism": 0.8,
+            "success": 0.8,
+            "failure": 0.8,
+            "novelty": 0.8,
+            "boredom": 0.8,
+            "loneliness": 0.8,
+            "voice_recognized": 0.35,
+            "speech_detected": 0.35,
+            "loud_noise": 0.8,
+            "environment_scan": 0.4,
+            "threat_detected": 0.8,
+            "face_recognized": 0.4,
+            "face_unknown": 0.8,
+        }
+        self.event_exposure_counts: dict[str, int] = {}
+        self._step_counter = -1
+        self._last_loud_noise_step = -999
 
     @staticmethod
     def _voice_valence_from_keywords(keywords: set[str]) -> float:
@@ -97,11 +172,26 @@ class SyntheticEnvironment:
             return 0.4
         return 0.1
 
+    def _compute_novelty(self, category: str, content: str, base_novelty: float | None = None) -> float:
+        base = (
+            float(base_novelty)
+            if base_novelty is not None
+            else float(self.category_default_novelty.get(category, 0.4))
+        )
+        event_key = f"{category}|{(content or '').strip().lower()}"
+        exposure = self.event_exposure_counts.get(event_key, 0)
+        novelty = base * (0.5 ** (exposure / 10.0))
+        novelty = max(0.05, novelty)
+        self.event_exposure_counts[event_key] = exposure + 1
+        return novelty
+
     def generate_event(self) -> PerceptionEvent:
+        self._step_counter += 1
         category, description, valence = self._rng.choice(self.EVENT_LIBRARY)
         intensity = self._rng.uniform(0.2, 0.65)
         if category in self.LANDMARK_EVENTS and self._rng.random() < 0.30:
             intensity = self._rng.uniform(0.8, 0.92)
+        novelty = self._compute_novelty(category=category, content=description, base_novelty=0.8)
         return PerceptionEvent(
             modality="experience",
             content=description,
@@ -110,7 +200,7 @@ class SyntheticEnvironment:
             intensity=max(0.0, min(1.0, intensity)),
             source="simulated",
             timestamp=time.time(),
-            scene={"novelty": 0.8, "salience": abs(valence)},
+            scene={"novelty": novelty, "salience": abs(valence)},
         )
 
     def generate_vision_signal(self) -> VisionSignal:
@@ -195,6 +285,11 @@ class SyntheticEnvironment:
             f"objects={','.join(objects)}; motion={signal.motion_level:.2f}; "
             f"confidence={signal.confidence:.2f}"
         )
+        novelty = self._compute_novelty(
+            category=category,
+            content=content,
+            base_novelty=self.category_default_novelty.get(category, 0.4),
+        )
         return PerceptionEvent(
             modality="vision",
             content=content,
@@ -208,14 +303,28 @@ class SyntheticEnvironment:
                 "attributes": signal.attributes,
                 "relations": relations,
                 "confidence": signal.confidence,
-                "novelty": 0.8 if category in {"face_unknown", "threat_detected"} else 0.4,
+                "novelty": novelty,
                 "salience": abs(valence),
             },
         )
 
     def generate_hearing_signal(self) -> HearingSignal:
         """Create one synthetic structured hearing signal for development/testing."""
-        transcript, speaker_type, sentiment, keywords = self._rng.choice(self._hearing_samples)
+        candidates = list(self._hearing_samples)
+        if self._step_counter - self._last_loud_noise_step < 5:
+            candidates = [
+                sample
+                for sample in candidates
+                if "loud_noise" not in {k.lower() for k in sample.get("keywords", [])}
+            ]
+        weights = [float(sample.get("weight", 0.1)) for sample in candidates]
+        sample = self._rng.choices(candidates, weights=weights, k=1)[0]
+        transcript = sample["transcript"]
+        speaker_type = sample["speaker_type"]
+        sentiment = sample["sentiment"]
+        keywords = list(sample["keywords"])
+        if "loud_noise" in {k.lower() for k in keywords}:
+            self._last_loud_noise_step = self._step_counter
         return HearingSignal(
             transcript=transcript,
             speaker_type=speaker_type,
@@ -248,10 +357,16 @@ class SyntheticEnvironment:
             intensity = self._rng.uniform(0.35, 0.65)
 
         salience = 0.4 if {"accountability", "confrontation"} & keywords else abs(valence)
+        content = signal.transcript if signal.transcript else "silence"
+        novelty = self._compute_novelty(
+            category=category,
+            content=content,
+            base_novelty=self.category_default_novelty.get(category, 0.35),
+        )
 
         return PerceptionEvent(
             modality="hearing",
-            content=signal.transcript if signal.transcript else "silence",
+            content=content,
             category=category,
             valence=valence,
             intensity=intensity,
@@ -261,7 +376,7 @@ class SyntheticEnvironment:
                 "speaker_type": signal.speaker_type,
                 "keywords": list(keywords),
                 "prosody_intensity": signal.prosody_intensity,
-                "novelty": 0.8 if category in {"loud_noise", "speech_detected"} else 0.35,
+                "novelty": novelty,
                 "salience": salience,
             },
         )
