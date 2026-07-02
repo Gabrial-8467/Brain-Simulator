@@ -228,3 +228,225 @@ When presenting this project to interviewers, make sure to highlight these three
 1. **Decoupled Configuration**: All neurochemical baselines, interaction scales, decay rates, and baseline decision weights are externalized in YAML configs (`config/`). The codebase remains generic, allowing developers to change the entire cognitive profile of the agent (e.g., making it highly anxious vs. highly resilient) without editing a single line of Python code.
 2. **Deterministic vs. Stochastic Execution**: Setting the `--deterministic` flag replaces random choice weights with greedy maximum selection and removes stochastic noise from chemical homeostasis. This makes cognitive simulation runs 100% reproducible for scientific evaluation.
 3. **Structured Perception Ingestion**: Instead of flat text parsing, the perception pipeline is multi-layered. Text is normalized, stopwords are removed, and key concepts are extracted into a dictionary of strengths and associations. Visual input is ingested as semantic spatial relations (e.g., `near`, `on`), which are processed into cognitive events before reaching the core loop.
+
+---
+
+## 5. Exhaustive Mathematical & Algorithmic Specifications
+
+For advanced technical reviews, this section details the precise mathematical formulas, threshold values, and conditional logics present throughout the Virtual Brain codebase.
+
+### A. Neurochemical Equations & Saturation Modeling
+Chemical fluctuations are computed step-by-step to prevent linear runaways, mimicking biological receptor saturation.
+
+1. **Receptor Saturation Scaling (`_saturation_scaled_delta`)**:
+   When a decision or event applies a feedback delta to a chemical, the actual change is scaled based on how close the chemical's current value is to its boundary:
+   $$\text{Headroom} = \begin{cases} 
+      \frac{\text{Max} - \text{Value}}{\text{Max} - \text{Min}} & \text{if } \Delta \ge 0 \\ 
+      \frac{\text{Value} - \text{Min}}{\text{Max} - \text{Min}} & \text{if } \Delta < 0 
+   \end{cases}$$
+   $$\text{Scale} = \max(0.15, \min(1.0, \text{Headroom} \times 1.8))$$
+   $$\Delta_{\text{actual}} = \Delta \times \text{Scale}$$
+   This ensures that as a neurochemical approaches 100 or 0, it becomes progressively harder to push it further, establishing a soft asymptotic limit.
+
+2. **Homeostasis Integration Cycle**:
+   For each chemical, the homeostatic pull is computed as:
+   $$\text{Delta}_{\text{base}} = (\text{Baseline} - \text{Value}) \times 0.04$$
+   $$\text{Delta}_{\text{clamped}} = \max(-1.0, \min(1.0, \text{Delta}_{\text{base}}))$$
+   
+   *Special Chemical Rules:*
+   *   **Dopamine**: If there are no positive valence perceptions in the current cycle, upward pulls are capped at `0.5` instead of `1.0`.
+   *   **Oxytocin**: Decay is modulated by the agent's identity `social_value`:
+       $$\text{Decay Multiplier} = \begin{cases} 
+          0.4 & \text{if } \text{social\_value} > 0.8 \\ 
+          0.7 & \text{if } \text{social\_value} > 0.6 \\ 
+          1.0 & \text{otherwise} 
+       \end{cases}$$
+       If Oxytocin drops below 62.0, an extra positive correction pull is applied: $\text{Oxytocin} \leftarrow \text{Oxytocin} + (62.0 - \text{Oxytocin}) \times 0.04$.
+   *   **Cortisol**: Excess cortisol above `45.0` experiences a rapid passive clearance pull:
+       $$\text{Cortisol Decay} = 0.04 \times (\text{Cortisol} - 45.0)$$
+       $$\text{Delta}_{\text{final}} = \text{Delta}_{\text{clamped}} - \text{Cortisol Decay}$$
+   *   **Serotonin**: Exerts a stabilizing regulation pull on itself post-update:
+       $$\text{Serotonin} \leftarrow \text{Serotonin} + (60.0 - \text{Serotonin}) \times 0.02$$
+
+3. **Stochastic Noise Insertion**:
+   If not running in `--deterministic` mode, a random value is injected into each chemical:
+   $$\text{Value} \leftarrow \text{Value} + \text{Uniform}(-\text{noise\_limit}, \text{noise\_limit})$$
+   *(e.g., limit is 0.5 for dopamine, 0.4 for cortisol/serotonin, 0.3 for oxytocin)*.
+
+---
+
+### B. Workspace Selection Algorithm
+Thoughts compete in a Global Workspace using an activation score evaluated at runtime:
+
+1. **Recency Decay Factor**:
+   The age of a thought (time elapsed in seconds since it was posted to the workspace) decays its recency factor linearly:
+   $$\text{Recency Factor} = \max\left(0.0, 1.0 - \frac{\text{Age}}{30.0}\right)$$
+
+2. **Weighted Activation Formula**:
+   $$\text{Activation} = 0.35 \cdot E + 0.20 \cdot N + 0.25 \cdot R + 0.20 \cdot \text{Recency Factor}$$
+   *   $E$: Emotional Weight (0.0 to 1.0)
+   *   $N$: Novelty (0.0 to 1.0)
+   *   $R$: Relevance to Goals (0.0 to 1.0)
+
+3. **Focus Stability Component**:
+   The focus stability score determines attention consistency, contributing to the consciousness score:
+   $$\text{Focus Stability} = \min\left(1.0, \frac{\text{Streak}}{20}\right)$$
+   If the winning thought is a consecutive repeat, `Streak` increments by 1. If it changes, `Streak` resets to 1.
+
+---
+
+### C. Belief Engine Schema Rules
+The `BeliefEngine` processes the last 45 events in its sliding window to compute statistical ratios. If a ratio matches the criteria below, the belief is active:
+
+*   **Criticism Schema**: Activated if `criticism_like_count >= 3` and $\frac{\text{criticism\_like\_count}}{\text{total\_events}} \ge 0.12$.
+    $$\text{Confidence}_{\text{target}} = 0.2 + (\text{criticism\_ratio} \times 1.9) + \min\left(0.2, \frac{\text{criticism\_count}}{25.0}\right)$$
+*   **Failure Schema**: Activated if `task_total >= 4` and $\frac{\text{failures}}{\text{task\_total}} > 0.55$.
+    $$\text{Confidence}_{\text{target}} = 0.25 + (\text{failure\_ratio} - 0.5) \times 1.3$$
+*   **Mastery/Effort Schema**: Activated if `task_total >= 4` and $\frac{\text{successes}}{\text{task\_total}} > 0.55$.
+    $$\text{Confidence}_{\text{target}} = 0.25 + (\text{success\_ratio} - 0.5) \times 1.3$$
+*   **Rejection Schema**: Activated if `social_attempts >= 4` and $\frac{\text{rejections}}{\text{social\_attempts}} > 0.52$.
+    $$\text{Confidence}_{\text{target}} = 0.2 + (\text{rejection\_ratio} \times 0.9)$$
+*   **Support Schema**: Activated if `social_attempts >= 4` and $\frac{\text{supports}}{\text{social\_attempts}} > 0.5$.
+    $$\text{Confidence}_{\text{target}} = 0.2 + (\text{support\_ratio} \times 0.8)$$
+*   **Threat Schema**: Activated if `threat_load >= 3` and $\frac{\text{threat\_load}}{\text{total\_events}} \ge 0.1$.
+    $$\text{Confidence}_{\text{target}} = 0.2 + (\text{threat\_ratio} \times 1.6)$$
+*   **Adaptation Schema**: Activated if `novelty_exposure >= 3` and $\text{successes} \ge \max(1, 0.7 \times \text{failures})$.
+    $$\text{Confidence}_{\text{target}} = 0.2 + \min\left(0.55, \frac{\text{novelty\_exposure}}{\text{total\_events}}\right)$$
+
+**Confidence Smoothing Update:**
+Active belief confidences are smoothed across ticks:
+$$\text{Smooth Rate} = \text{smoothing\_factor} \times \left(1.0 + \min\left(0.3, \frac{\text{reflection\_depth}}{25.0}\right)\right)$$
+$$\text{Confidence}_{\text{new}} = \text{Confidence}_{\text{old}} + (\text{Confidence}_{\text{target}} - \text{Confidence}_{\text{old}}) \times \text{Smooth Rate}$$
+If a belief is no longer triggered by recent evidence, it decays: $\text{Confidence} \leftarrow \text{Confidence} \times 0.985$, and is deleted if it falls below `0.08`.
+
+---
+
+### D. Action Probability Modulation Matrix
+The baseline probabilities for actions in `DecisionEngine` are modified by internal variables before normalization:
+
+| Action Category | Baseline Prob | Neurochemical Modifiers | Mood & Identity Modifiers | Belief Modifiers |
+| :--- | :--- | :--- | :--- | :--- |
+| **support** | 0.35 | $+0.85 \cdot \text{Oxy} - 0.5 \cdot \text{Cort}$<br>$+0.16 \cdot \text{Sero}$ | $+0.35 \cdot \text{Salience} \cdot \max(0, \text{MoodValence})$<br>$+0.28 \cdot \text{SocialNorm}$ | $-0.22 \cdot \text{RejectionBelief}$<br>$+0.24 \cdot \text{SupportBelief}$ |
+| **challenge** | 0.25 | $+0.35 \cdot \text{Cort}$ | $+0.35 \cdot \text{Salience} \cdot \max(0, -\text{MoodValence})$ | $+0.10 \cdot \text{MasteryBelief}$ |
+| **suggest** | 0.20 | $+0.55 \cdot \text{Dop} - 0.25 \cdot \text{Cort}$<br>$+0.14 \cdot \text{Dop}$ | $+0.22 \cdot \text{Competence}$ | $+0.16 \cdot \text{MasteryBelief}$ |
+| **refuse** | 0.10 | $+0.90 \cdot \text{Cort}$ | $+0.4 \cdot \text{Cort} \cdot (1 - \text{SocialNorm})$<br>$+0.22 \cdot \max(0, -\text{MoodValence})$ | $-0.10 \cdot \text{SupportBelief}$<br>$+0.12 \cdot \text{UnsafeBelief}$ |
+| **neutral** | 0.10 | $+0.55 \cdot \text{Cort}$ | $+0.3 \cdot \text{Cort} + 0.1 \cdot (1 - \text{Salience})$ | $+0.12 \cdot \text{RejectionBelief}$<br>$+0.18 \cdot \text{UnsafeBelief}$ |
+
+*   **Stress Gating**: If stress level (cortisol / 100) exceeds `0.6`, refuse probability is increased by $+0.55 \cdot \text{Pressure}$, neutral is increased by $+0.35 \cdot \text{Pressure}$, and support is decreased by $-0.25 \cdot \text{Pressure}$ (where $\text{Pressure} = \frac{\text{stress} - 0.6}{0.4}$).
+*   **Mood Shifts**: A negative mood valence ($<-0.2$) boosts refuse by $+1.0 \times \text{Push}$ and neutral by $+0.75 \times \text{Push}$, while suppressing support by $-0.45 \times \text{Push}$ (where $\text{Push} = |\text{Valence}| \times (0.2 + 0.1 \times \text{Arousal})$).
+
+---
+
+### E. Speech Regulation Logic (`regulate_speech`)
+When generating or reacting with linguistic outputs, the brain regulates speech parameters:
+1.  **Stress/Fatigue Gating**: If `fatigue > 0.7` or `cortisol > 70`, the speech is split at the first period (`.`) and truncated to a single sentence, representing an inability to maintain long chains of thought.
+2.  **Childhood Gating**: If the developmental stage is "child", the string is restricted to the first `28` tokens to model limited vocabulary/expression.
+3.  **Coordination Correction**: Any trailing conjunctions (`and`, `or`, `but`, `so`, `because`) at the end of truncated strings are dynamically pruned.
+4.  **Empathy Prefixing**: If `oxytocin > 70` and the output does not begin with personal pronouns (e.g., `i `, `we `, `let`, `you`), the system prepends `"I hear you. "` to the statement, signaling high social alignment.
+
+---
+
+### F. Staged/Decoupled Subsystems
+These modules represent syntactically complete extensions ready for future scaling:
+
+1.  **`BiasEngine` (`bias/bias_engine.py`)**:
+    *   **Imprinting**: Conscious chemical values are compared to baselines. If deviation $|\text{Conscious} - \text{Baseline}| \ge 8.0$, a slow imprint alters personality baseline values:
+        $$\text{Bias} \leftarrow \text{Bias} + \text{Sign}(\text{Deviation}) \times 0.0005$$
+    *   **Baseline Shift**: The active baseline of any chemical is shifted temporarily:
+        $$\text{Baseline}_{\text{active}} = \text{Baseline}_{\text{config}} + \text{Bias} \times \text{Weight}$$
+    *   **Reaction Scaling**: Amplifies incoming emotional impacts:
+        $$\Delta_{\text{scaled}} = \Delta \times (1 + \text{Bias} \times \text{Weight})$$
+
+2.  **`AttachmentSystem` (`development/attachment_system.py`)**:
+    *   Tracks bonding values with caregiver/social sources between `[-1.0, 1.0]`:
+        $$\text{Attachment} \leftarrow \text{Attachment} + 0.01 \cdot \text{Reward} - 0.01 \cdot \text{Stress}$$
+    *   Bonding decays slowly: $\text{Attachment} \leftarrow \text{Attachment} \times (1 - 0.0003)$ per tick.
+
+3.  **`CuriosityEngine` (`development/curiosity_engine.py`)**:
+    *   Tracks how often specific context keys are encountered.
+    *   Calculates a curiosity bonus to boost candidate thoughts based on inverse frequency:
+        $$\text{Curiosity Bonus} = \frac{1}{1 + \text{Frequency}}$$
+
+4.  **`GoalSystem` (`development/goal_system.py`)**:
+    *   Goal reward values are accumulated in a dictionary:
+        $$\text{Goal Value} \leftarrow \text{Goal Value} + \text{Reward} \times 0.05$$
+    *   Goal values decay slowly: $\text{Goal} \leftarrow \text{Goal} \times 0.999$ per cycle. The goal with the highest reward value is returned as the active target.
+
+---
+
+## 6. Conscious vs. Subconscious Brain Dynamics (Biological Alignment)
+
+In human cognitive psychology and neurobiology, mental processes are divided into conscious awareness and subconscious/preconscious engines. The **Brain Simulator** implements this division, modeling how background physiological and statistical shifts influence and shape the active "mind."
+
+Here is a detailed breakdown of how **Conscious** and **Subconscious** dynamics are simulated and interact within this codebase:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                      CONSCIOUS BRAIN (Awareness)                        │
+│                                                                        │
+│  ┌───────────────────────┐  ┌─────────────────────┐  ┌──────────────┐  │
+│  │   Global Workspace    │  │   Self-Narrative    │  │  Reflection  │  │
+│  │  (Attention Focus)    │  │(Internal Monologue) │  │(Metacognition│  │
+│  └───────────▲───────────┘  └──────────▲──────────┘  └──────▲───────┘  │
+└──────────────┼─────────────────────────┼────────────────────┼──────────┘
+               │ Broadcasts Winner       │ Shapes Narrative   │ Evaluates Outcomes
+               │                         │                    │
+┌──────────────┼─────────────────────────┼────────────────────┼──────────┐
+│                    SUBCONSCIOUS BRAIN (Background)                     │
+│                                                                        │
+│  ┌───────────────────────┐  ┌─────────────────────┐  ┌──────────────┐  │
+│  │  Homeostatic Engines  │  │   Belief Engine     │  │ Preconscious │  │
+│  │ (Neurochemical Drift) │  │ (Cognitive Schemas) │  │  Candidates  │  │
+│  └───────────────────────┘  └─────────────────────┘  └──────────────┘  │
+│  ┌───────────────────────┐  ┌─────────────────────┐  ┌──────────────┐  │
+│  │   Appraisal Engine    │  │  Decoupled Drives   │  │ Bias/Temper  │  │
+│  │(Background Similarity)│  │ (Curiosity, Goals)  │  │  (Baselines) │  │
+│  └───────────────────────┘  └─────────────────────┘  └──────────────┘  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### A. The Conscious Brain (Explicit Awareness)
+Conscious processes are those that directly enter the agent's focal awareness, are verbally/linguistically structured, or represent deliberate cognitive control:
+
+1. **Attention Focus / Global Workspace (`core/attention.py`)**:
+   * *Biological Equivalent*: The frontoparietal attention network and the central executive.
+   * *How it works in Code*: Multiple thoughts (perceptions, memories, goals) contend in the `GlobalWorkspace`. The winner of the workspace competition becomes the `current_focus` (active conscious focus). The agent is only "aware" of one focus thought per cycle.
+
+2. **The Self-Narrative (`cognition/narrative_engine.py`)**:
+   * *Biological Equivalent*: The default mode network (DMN) and the left-hemisphere interpreter, which constructs a continuous verbal story to explain our behaviors and states.
+   * *How it works in Code*: The `NarrativeEngine` computes a text string (`current_narrative`) based on recent event success ratios and stress levels (e.g. *"I struggle but I endure. The world feels stressful"*). This simulates the verbal internal monologue of the conscious mind.
+
+3. **Metacognitive Self-Reflection (`core/self_reflection.py`)**:
+   * *Biological Equivalent*: Prefrontal cortex reflection and error-monitoring (Anterior Cingulate Cortex).
+   * *How it works in Code*: The `SelfReflection` module runs after an action is selected, comparing expectations with counterfactual alternatives. It calculates regret and consciously posts a reflection thought (`"Reflection on support: regret=0.15"`) back to the workspace so the agent is forced to pay attention to its own performance.
+
+4. **Consciousness Scoring (`core/consciousness.py`)**:
+   * *Biological Equivalent*: Thalamocortical coherence, vigilance, and focus stability.
+   * *How it works in Code*: Computes a score based on focus stability (streaks), worldview coherence, narrative complexity, and development. This score directly modulates conscious risk tolerance—high consciousness prompts deliberate, risk-averse behavior, whereas low consciousness shifts the agent into impulsive reactivity.
+
+---
+
+### B. The Subconscious Brain (Background Processing)
+Subconscious and preconscious processes run silently under the hood, updating physical/chemical parameters and pre-filtering information before it ever reaches conscious focus:
+
+1. **Preconscious Candidate Pool (`core/attention.py`)**:
+   * *Biological Equivalent*: The vast array of sensory, memory, and cognitive signals competing in the thalamus before being gated into conscious attention.
+   * *How it works in Code*: The `_candidates` list in `GlobalWorkspace` holds all thoughts currently posted. These thoughts exist in a preconscious buffer; unless a candidate thought wins the activation formula, it remains subconscious and is eventually cleared at the end of the tick.
+
+2. **Neurochemical Homeostasis & Drift (`core/brain.py` & `core/interactions.py`)**:
+   * *Biological Equivalent*: The autonomic nervous system and deep brain stem nuclei (e.g., raphe nuclei, VTA) regulating baseline arousal, heart rate, and baseline moods.
+   * *How it works in Code*: In every tick, chemical baseline decay, matrix interactions, and stochastic noise adjustments run automatically. The agent cannot consciously modify its Dopamine or Cortisol levels; these levels drift subconsciously and pre-set the agent's mood tone and baseline action probabilities.
+
+3. **Cognitive Schemas & Active Beliefs (`cognition/belief_engine.py`)**:
+   * *Biological Equivalent*: Cognitive biases, mental models, and deep schemas stored in association cortices that automatically shape how we interpret events.
+   * *How it works in Code*: The `BeliefEngine` constantly calculates criticism, failure, and support ratios over a sliding window of past events. It activates schemas silently (e.g. *"Criticism often follows my attempts"*). These active schemas then warp appraisal calculations under the hood (e.g., scaling down dopamine feedback from positive events).
+
+4. **Automatic Emotional Appraisal (`learning/appraisal_engine.py` & `learning/similarity_engine.py`)**:
+   * *Biological Equivalent*: The amygdala and limbic system executing fast, automatic, non-conscious emotional evaluations of sensory stimuli before visual/auditory signals reach the cortex.
+   * *How it works in Code*: The `SimilarityEngine` scans past profiles by calculating vector distances under the hood to find similar past occurrences. It generalizes predictions and applies updates to the `AppraisalEngine` without any conscious intervention.
+
+5. **Decoupled Background Drives (`development/`)**:
+   * *Biological Equivalent*: Core evolutionary drives (curiosity, goal-seeking, social attachment) that run automatically to ensure survival.
+   * *How it works in Code*: The `AttachmentSystem`, `CuriosityEngine`, and `GoalSystem` run background counters (e.g., tracking context frequencies, calculating bonding decay ratios). These systems silently feed curiosity bonuses and relevance factors into thoughts, guiding what the conscious mind chooses to focus on.
+
+
