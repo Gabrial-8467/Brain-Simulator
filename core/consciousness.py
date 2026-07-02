@@ -8,6 +8,7 @@ from core.attention import GlobalWorkspace
 class Consciousness:
     def __init__(self) -> None:
         self.score = 0.0
+        self.last_components: dict[str, float] = {}
 
     def compute_score(self, brain: Any) -> float:
         stability = GlobalWorkspace.focus_stability()
@@ -37,17 +38,52 @@ class Consciousness:
         if focus and focus.source in ("memory", "goal"):
             source_bonus = 0.1
 
-        raw = (
+        attention_component = (
             stability
             + streak_bonus
             + source_bonus
-            + development_bonus
-            + reflection_bonus
             + vision_bonus
             + hearing_bonus
             + novelty_bonus
         )
+        attention_component = max(0.0, min(1.0, attention_component))
+
+        worldview = getattr(brain, "worldview", None)
+        worldview_factors = {
+            "belief_coherence": 0.5,
+            "prediction_accuracy": 0.5,
+            "internal_consistency": 0.5,
+            "reflection_frequency": 0.0,
+            "narrative_complexity": 0.0,
+        }
+        if worldview and hasattr(worldview, "get_consciousness_factors"):
+            worldview_factors = worldview.get_consciousness_factors(
+                reflection_depth=getattr(getattr(brain, "development", None), "reflection_depth", 0.0),
+                narrative=getattr(getattr(brain, "narrative_engine", None), "current_narrative", ""),
+            )
+
+        worldview_component = (
+            float(worldview_factors.get("belief_coherence", 0.5)) * 0.30
+            + float(worldview_factors.get("prediction_accuracy", 0.5)) * 0.25
+            + float(worldview_factors.get("internal_consistency", 0.5)) * 0.20
+            + float(worldview_factors.get("reflection_frequency", 0.0)) * 0.15
+            + float(worldview_factors.get("narrative_complexity", 0.0)) * 0.10
+        )
+        worldview_component = max(0.0, min(1.0, worldview_component))
+
+        raw = (
+            attention_component * 0.38
+            + worldview_component * 0.42
+            + development_bonus * 0.12
+            + reflection_bonus * 0.08
+        )
         target = max(0.0, min(1.0, raw))
+        self.last_components = {
+            "attention_component": round(attention_component, 4),
+            "worldview_component": round(worldview_component, 4),
+            "development_bonus": round(development_bonus, 4),
+            "reflection_bonus": round(reflection_bonus, 4),
+        }
         # Smooth step-to-step noise while still integrating new evidence.
         self.score = (0.95 * self.score) + (0.05 * target)
         self.score = max(0.0, min(1.0, self.score))

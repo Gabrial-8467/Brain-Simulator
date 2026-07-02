@@ -128,6 +128,32 @@ class Simulator:
 
         narrative = self._short_text(state.get("self_narrative", ""), max_len=110)
         print(f'[Narrative] "{narrative}"')
+        mood_state = state.get("mood_state", {}) or {}
+        if mood_state:
+            print(
+                "[Mood] "
+                f"tone={mood_state.get('tone', 'neutral')} "
+                f"valence={self._safe_round(mood_state.get('valence', 0.0), 3)} "
+                f"arousal={self._safe_round(mood_state.get('arousal', 0.0), 3)}"
+            )
+
+        beliefs = state.get("beliefs", []) or []
+        if beliefs:
+            ranked_beliefs = sorted(
+                [b for b in beliefs if isinstance(b, dict)],
+                key=lambda b: (
+                    float(b.get("confidence", 0.0)),
+                    int(b.get("evidence_count", 0)),
+                ),
+                reverse=True,
+            )[:2]
+            if ranked_beliefs:
+                belief_parts = []
+                for belief in ranked_beliefs:
+                    belief_parts.append(
+                        f"{belief.get('statement', '')}@{self._safe_round(belief.get('confidence', 0.0), 3)}"
+                    )
+                print("[Beliefs] " + " | ".join(belief_parts))
 
         concept_count = len(state.get("concept_memory", {}) or {})
         recent_count = len(state.get("recent_perceptions", []) or [])
@@ -161,7 +187,10 @@ class Simulator:
                 f"threshold={decision_debug.get('emotional_threshold')} "
                 f"hits10={decision_debug.get('high_emotion_hits_last_10')} "
                 f"gate={decision_debug.get('gate_pass')} "
-                f"forced={decision_debug.get('forced_fallback')}"
+                f"forced={decision_debug.get('forced_fallback')} "
+                f"beliefs={decision_debug.get('belief_count')} "
+                f"shift={decision_debug.get('belief_shift')} "
+                f"mood={decision_debug.get('mood_tone')}"
             )
 
         print(self._format_decision_line(decision))

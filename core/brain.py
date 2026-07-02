@@ -16,6 +16,7 @@ from core.internal_thoughts import generate_spontaneous
 from core.self_reflection import SelfReflection
 
 from cognition.autobiographical_memory import AutobiographicalMemory
+from cognition.belief_engine import BeliefEngine
 from cognition.narrative_engine import NarrativeEngine
 
 from decision.strategic_planner import StrategicPlanner
@@ -33,6 +34,7 @@ class VirtualBrain:
         feedback_multiplier: float = 1.0,
         deterministic: bool = False,
         memory_storage_path: str | None = None,
+        worldview_config: dict | None = None,
     ):
         self.deterministic = deterministic
         self.feedback_multiplier = feedback_multiplier
@@ -45,6 +47,7 @@ class VirtualBrain:
 
         self.autobiography = AutobiographicalMemory()
         self.narrative_engine = NarrativeEngine()
+        self.worldview = BeliefEngine(worldview_config)
 
         self.similarity_engine = SimilarityEngine()
         self.appraisal_engine = AppraisalEngine(similarity_engine=self.similarity_engine)
@@ -140,12 +143,15 @@ class VirtualBrain:
         self.interaction_matrix = interaction_matrix or {}
         self.step_counter = 0
         self._step_perception_valences: list[float] = []
+        self._step_perception_signals: list[dict[str, Any]] = []
         self._social_decay_hold_counter = 0
         self._high_emotion_window = deque(maxlen=10)
         self._decision_debug: dict[str, Any] = {}
         self._high_stress_steps = 0
         self._low_serotonin_steps = 0
         self._step_adversity_intensity = 0.0
+        self._chronic_stress_steps = 0
+        self._emotional_dip_active = False
         self._comfort_steps = 0
         self._last_maturity = 0.0
         self._last_concept_count = 0
@@ -259,6 +265,12 @@ class VirtualBrain:
             self._high_stress_steps += 1
         else:
             self._high_stress_steps = 0
+        if cortisol > 58.0:
+            self._chronic_stress_steps += 1
+        else:
+            self._chronic_stress_steps = max(0, self._chronic_stress_steps - 1)
+
+        self.worldview.update_mood(self._step_perception_signals)
 
         self._update_resilience()
         self._update_reflection_balance()
@@ -272,6 +284,7 @@ class VirtualBrain:
         self._enforce_identity_floors()
 
         self._encode_autobiography()
+        belief_update = self._update_worldview()
 
         generate_spontaneous(self)
         self.current_focus = GlobalWorkspace.select()
@@ -293,6 +306,10 @@ class VirtualBrain:
             "memory_feedback_suppressed": False,
             "memory_recall_type": None,
             "memory_recall_scale": 0.0,
+            "belief_count": int(belief_update.get("belief_count", 0)),
+            "belief_shift": float(belief_update.get("max_conf_shift", 0.0)),
+            "mood_valence": float(self.worldview.mood_state.get("valence", 0.0)),
+            "mood_tone": str(self.worldview.mood_state.get("tone", "neutral")),
         }
 
         if self.current_focus and self.current_focus.source == "memory":
@@ -310,9 +327,11 @@ class VirtualBrain:
             recent_valence_avg = sum(self._step_perception_valences) / len(self._step_perception_valences)
 
         if self.decision_engine and self.current_focus and gate_pass:
+            decision_state = self.get_state()
+            decision_state["decision_action_bias"] = self.worldview.decision_bias()
             decision_output = self.decision_engine.decide(
                 self.current_focus,
-                state=self.get_state(),
+                state=decision_state,
                 recent_valence_avg=recent_valence_avg,
             )
             self._decision_debug["decision_path"] = "model"
@@ -347,6 +366,11 @@ class VirtualBrain:
                     current_state=self.get_state(),
                 )
                 self.self_reflection.propose_reflection_thought(self, action, regret)
+                self.worldview.record_decision_outcome(
+                    action=action,
+                    success=bool(regret <= 0.05),
+                    intensity=float(getattr(self.current_focus, "emotional_weight", 0.5) or 0.5),
+                )
 
         self._update_cognitive_growth(regret)
         stage_changed = self._update_stage_transition()
@@ -367,6 +391,7 @@ class VirtualBrain:
         self.step_counter += 1
         self.memory_manager.flush_pending()
         self._step_perception_valences = []
+        self._step_perception_signals = []
         self._step_adversity_intensity = 0.0
         return decision_output
 
@@ -393,7 +418,24 @@ class VirtualBrain:
 
         valence = max(-1.0, min(1.0, valence))
         intensity = max(0.0, min(1.0, intensity))
+        expected_valence = self.worldview.expected_valence(category or modality)
+        valence, intensity = self.worldview.adjust_appraisal(
+            category=category or modality,
+            content=content,
+            valence=valence,
+            intensity=intensity,
+            modality=modality,
+        )
+        self.worldview.record_prediction(expected_valence=expected_valence, actual_valence=valence)
         self._step_perception_valences.append(valence)
+        self._step_perception_signals.append(
+            {
+                "category": category or modality,
+                "modality": modality,
+                "valence": valence,
+                "intensity": intensity,
+            }
+        )
         if category in {"failure", "criticism", "threat_detected"}:
             self._step_adversity_intensity += intensity
 
@@ -572,7 +614,8 @@ class VirtualBrain:
         return delta * scale
 
     def inject_event(self, effects: dict, event_type=None, source=None, tags=None):
-        resilience = self.identity.get("resilience")
+        resilience = max(0.0, float(self.identity.get("resilience")))
+        effective_resilience = resilience / (1.0 + resilience)
         maturity = self.development.maturity
 
         predicted = self.appraisal_engine.predict_emotion(
@@ -614,9 +657,9 @@ class VirtualBrain:
             if chem in self.chemicals:
                 bounded = max(-8.0, min(8.0, float(delta)))
                 if chem in ["dopamine", "serotonin"] and bounded < 0:
-                    bounded *= 1 - resilience * 0.5
+                    bounded *= 1 - effective_resilience * 0.5
                 if chem == "cortisol":
-                    bounded *= 1 - resilience * 0.4
+                    bounded *= 1 - effective_resilience * 0.4
                 self.chemicals[chem]["value"] += self._saturation_scaled_delta(chem, bounded)
 
         self._clamp()
@@ -727,8 +770,68 @@ class VirtualBrain:
         summary = ", ".join([f"{k}:{v}" for k, v in top]) if top else "no dominant pattern"
         return f"I reflected over {len(recent_perceptions)} perceptions: {summary}"
 
+    def _update_worldview(self) -> dict[str, Any]:
+        recent_events = self.autobiography.get_recent_events(self.worldview.event_window)
+        belief_update = self.worldview.extract_beliefs(
+            events=recent_events,
+            step_counter=self.step_counter,
+            reflection_depth=self.development.reflection_depth,
+        )
+        if belief_update.get("updated"):
+            self.memory_manager.create_memory(
+                memory_type="belief_update",
+                content={
+                    "beliefs": self.worldview.get_active_beliefs(limit=8, min_confidence=0.2),
+                    "max_conf_shift": belief_update.get("max_conf_shift", 0.0),
+                    "step_counter": self.step_counter,
+                },
+                metadata={"source": "worldview_engine"},
+            )
+
+        drift = self.worldview.identity_drift(
+            cortisol=float(self.chemicals.get("cortisol", {}).get("value", 0.0)),
+            identity_snapshot=self.identity.get_snapshot(),
+        )
+        for trait, delta in drift.items():
+            self.identity.add_evidence(trait, delta)
+
+        if self.worldview.should_rewrite_narrative(
+            step_counter=self.step_counter,
+            max_conf_shift=float(belief_update.get("max_conf_shift", 0.0)),
+        ):
+            narrative = self.worldview.compose_narrative(
+                identity_snapshot=self.identity.get_snapshot(),
+                stage=self.development_stage,
+                existing_narrative=self.narrative_engine.get_current_narrative(),
+            )
+            if narrative and narrative != self.narrative_engine.get_current_narrative():
+                self.narrative_engine.current_narrative = narrative
+                self.worldview.mark_narrative_rewrite(self.step_counter)
+                self.autobiography.record_event(
+                    description=f"worldview_narrative_rewrite: {narrative}",
+                    chemicals={k: v["value"] for k, v in self.chemicals.items()},
+                    identity_snapshot=self.identity.get_snapshot(),
+                    metadata={
+                        "type": "worldview_narrative_rewrite",
+                        "belief_shift": belief_update.get("max_conf_shift", 0.0),
+                    },
+                )
+                GlobalWorkspace.post(
+                    Thought(
+                        content=f"I revised my worldview narrative: {narrative}",
+                        source="internal",
+                        emotional_weight=0.35,
+                        novelty=0.4,
+                        relevance_to_goals=0.6,
+                    )
+                )
+
+        return belief_update
+
     def _refresh_narrative(self, force: bool = False) -> None:
         if not force:
+            return
+        if self.worldview.get_active_beliefs(limit=1, min_confidence=0.3):
             return
         if self._narrative_milestone_index >= 0:
             return
@@ -922,6 +1025,9 @@ class VirtualBrain:
         }
 
     def _apply_narrative_milestones(self) -> None:
+        if self.worldview.get_active_beliefs(limit=1, min_confidence=0.35):
+            return
+
         state = {
             "stage": self.development_stage,
             "wisdom": float(self.wisdom),
@@ -977,7 +1083,7 @@ class VirtualBrain:
     def _enforce_identity_floors(self) -> None:
         if hasattr(self.identity, "traits") and "resilience" in self.identity.traits:
             self.identity.traits["resilience"] = round(
-                max(0.0, min(1.0, self.identity.traits["resilience"])),
+                max(0.0, float(self.identity.traits["resilience"])),
                 4,
             )
         if hasattr(self.identity, "traits") and "social_value" in self.identity.traits:
@@ -1528,22 +1634,48 @@ class VirtualBrain:
 
         adversity_intensity = max(0.0, min(1.0, float(self._step_adversity_intensity)))
         has_negative_step = any(v < 0.0 for v in self._step_perception_valences)
-        resilience = float(self.identity.traits.get("resilience", 0.5))
+        resilience = max(0.0, float(self.identity.traits.get("resilience", 0.5)))
+
+        cortisol = float(self.chemicals.get("cortisol", {}).get("value", 0.0))
+        dopamine = float(self.chemicals.get("dopamine", {}).get("value", 0.0))
+        serotonin = float(self.chemicals.get("serotonin", {}).get("value", 0.0))
+
+        in_emotional_dip = has_negative_step or dopamine < 56.0 or serotonin < 56.0
+        if in_emotional_dip:
+            self._emotional_dip_active = True
+
+        if self._chronic_stress_steps >= 5:
+            stress_load = max(0.0, (cortisol - 55.0) / 25.0)
+            stress_loss = 0.003 * (1.0 + min(1.5, stress_load))
+            resilience -= stress_loss * (1.0 + min(1.0, resilience / 2.5))
+
+        recovered = (
+            self._emotional_dip_active
+            and cortisol < 54.0
+            and dopamine > 57.0
+            and serotonin > 58.0
+        )
+        if recovered:
+            recovery_strength = 0.004 + (0.004 * max(0.0, (serotonin - 58.0) / 20.0))
+            soft_headroom = max(0.1, 2.5 - resilience)
+            resilience += recovery_strength * (soft_headroom / 2.5)
+            self._emotional_dip_active = False
 
         if adversity_intensity > 0.0 or has_negative_step:
-            # Hardening through adversity when the agent survives the cycle.
-            resilience += 0.002 * max(0.2, adversity_intensity)
+            hardening = 0.0015 * max(0.2, adversity_intensity)
+            survival_factor = max(0.2, 1.0 - max(0.0, cortisol - 45.0) / 70.0)
+            resilience += hardening * survival_factor
             self._comfort_steps = 0
             self.stress_accumulator += 1
             self.recovery_counter = 0
         else:
             self._comfort_steps += 1
             self.recovery_counter += 1
-            if self._comfort_steps >= 10:
-                # Mild complacency drift under prolonged comfort.
-                resilience -= 0.001
+            if self._comfort_steps >= 12 and cortisol < 50.0:
+                complacency = 0.0008 * max(0.2, resilience / 2.5)
+                resilience -= complacency
 
-        self.identity.traits["resilience"] = round(max(0.0, min(1.0, resilience)), 4)
+        self.identity.traits["resilience"] = round(max(0.0, resilience), 4)
 
     def _apply_homeostasis(self):
         has_positive_perception = any(v > 0 for v in self._step_perception_valences)
@@ -1636,7 +1768,7 @@ class VirtualBrain:
         )
         self.autobiography.propose_memory_thought(self)
 
-        if self.step_counter % 25 == 0:
+        if self.step_counter % 25 == 0 and not self.worldview.get_active_beliefs(limit=1, min_confidence=0.3):
             recent = self.autobiography.get_recent_events(100)
             self.narrative_engine.update_narrative(recent)
 
@@ -1672,6 +1804,11 @@ class VirtualBrain:
         narrative = self.narrative_engine.get_current_narrative()
         wisdom = self.self_reflection.get_wisdom()
         consciousness_score = getattr(self.consciousness, "score", 0.0)
+        worldview_state = self.worldview.to_state()
+        consciousness_components = self.worldview.get_consciousness_factors(
+            reflection_depth=self.development.reflection_depth,
+            narrative=narrative,
+        )
 
         state = {}
         state.update(chemical_values)
@@ -1700,6 +1837,10 @@ class VirtualBrain:
                 "perceptions_since_reflection": self.perceptions_since_reflection,
                 "fatigue": self.fatigue,
                 "decision_debug": dict(self._decision_debug),
+                "beliefs": worldview_state.get("beliefs", []),
+                "mood_state": worldview_state.get("mood_state", {}),
+                "worldview": worldview_state,
+                "consciousness_components": consciousness_components,
             }
         )
 
@@ -1731,8 +1872,13 @@ class VirtualBrain:
 
         for trait, value in identity_traits.items():
             if trait in self.identity.traits and isinstance(value, (int, float)):
-                minimum = -0.3 if trait == "social_value" else 0.0
-                self.identity.traits[trait] = round(max(minimum, min(1.0, float(value))), 4)
+                numeric = float(value)
+                if trait == "social_value":
+                    self.identity.traits[trait] = round(max(-0.3, min(1.0, numeric)), 4)
+                elif trait == "resilience":
+                    self.identity.traits[trait] = round(max(0.0, numeric), 4)
+                else:
+                    self.identity.traits[trait] = round(max(0.0, min(1.0, numeric)), 4)
 
         if isinstance(state_dict.get("development_stage"), str):
             self.development_stage = state_dict["development_stage"]
@@ -1806,6 +1952,14 @@ class VirtualBrain:
         perception_counter = state_dict.get("perceptions_since_reflection")
         if isinstance(perception_counter, (int, float)):
             self.perceptions_since_reflection = max(0, int(perception_counter))
+
+        worldview_payload = state_dict.get("worldview")
+        if not isinstance(worldview_payload, dict):
+            worldview_payload = {
+                "beliefs": state_dict.get("beliefs", []),
+                "mood_state": state_dict.get("mood_state", {}),
+            }
+        self.worldview.load_state(worldview_payload)
 
         self._clamp()
         self._enforce_identity_floors()
