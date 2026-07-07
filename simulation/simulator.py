@@ -11,6 +11,7 @@ class Simulator:
         environment=None,
         memory_manager=None,
         detailed_logs=True,
+        output_file=None,
     ):
         self.brain = brain
         self.tick_delay = tick_delay
@@ -20,6 +21,24 @@ class Simulator:
         self.environment = environment or SyntheticEnvironment(
             deterministic=getattr(brain, "deterministic", False)
         )
+        self.output_file = output_file
+        self.file_handle = None
+        if self.output_file:
+            self.file_handle = open(self.output_file, "w")
+
+    def _write(self, text=""):
+        """Write output to file or stdout."""
+        if self.file_handle:
+            self.file_handle.write(str(text) + "\n")
+            self.file_handle.flush()
+        else:
+            print(text)
+
+    def close_output(self):
+        """Close output file if open."""
+        if self.file_handle:
+            self.file_handle.close()
+            self.file_handle = None
 
     @staticmethod
     def _safe_round(value, digits=3):
@@ -78,12 +97,12 @@ class Simulator:
         return f"[Decision] action={action}"
 
     def _print_cycle_log(self, step, state, previous_state, decision, perceived_events):
-        print(f"Step {step}")
+        self._write(f"Step {step}")
 
         for event in perceived_events:
-            print(self._format_perception_line(event))
+            self._write(self._format_perception_line(event))
 
-        print(self._format_focus_line())
+        self._write(self._format_focus_line())
 
         dopamine = state.get("dopamine", 0.0)
         cortisol = state.get("cortisol", 0.0)
@@ -95,7 +114,7 @@ class Simulator:
         o_delta = oxytocin - previous_state.get("oxytocin", oxytocin)
         s_delta = serotonin - previous_state.get("serotonin", serotonin)
 
-        print(
+        self._write(
             "[Chemistry] "
             f"dopamine={self._safe_round(dopamine)} ({self._safe_round(d_delta)}) "
             f"cortisol={self._safe_round(cortisol)} ({self._safe_round(c_delta)}) "
@@ -108,7 +127,7 @@ class Simulator:
         social_value = identity.get("social_value", state.get("identity_social_value", 0.0))
         resilience = identity.get("resilience", state.get("identity_resilience", 0.0))
         intelligence = identity.get("intelligence", state.get("identity_intelligence", 0.0))
-        print(
+        self._write(
             "[Identity] "
             f"competence={self._safe_round(competence, 4)} "
             f"social_value={self._safe_round(social_value, 4)} "
@@ -116,7 +135,7 @@ class Simulator:
             f"intelligence={self._safe_round(intelligence, 4)}"
         )
 
-        print(
+        self._write(
             "[Development] "
             f"stage={state.get('development_stage')} "
             f"xp={self._safe_round(state.get('experience_points', 0.0), 2)} "
@@ -127,10 +146,10 @@ class Simulator:
         )
 
         narrative = self._short_text(state.get("self_narrative", ""), max_len=110)
-        print(f'[Narrative] "{narrative}"')
+        self._write(f'[Narrative] "{narrative}"')
         mood_state = state.get("mood_state", {}) or {}
         if mood_state:
-            print(
+            self._write(
                 "[Mood] "
                 f"tone={mood_state.get('tone', 'neutral')} "
                 f"valence={self._safe_round(mood_state.get('valence', 0.0), 3)} "
@@ -153,12 +172,12 @@ class Simulator:
                     belief_parts.append(
                         f"{belief.get('statement', '')}@{self._safe_round(belief.get('confidence', 0.0), 3)}"
                     )
-                print("[Beliefs] " + " | ".join(belief_parts))
+                self._write("[Beliefs] " + " | ".join(belief_parts))
 
         concept_count = len(state.get("concept_memory", {}) or {})
         recent_count = len(state.get("recent_perceptions", []) or [])
         autobiographical_count = len(state.get("autobiographical_memory", []) or [])
-        print(
+        self._write(
             "[Memory] "
             f"recent_perceptions={recent_count} "
             f"concepts={concept_count} "
@@ -174,11 +193,11 @@ class Simulator:
                 count = item.get("count", 0)
                 modalities = item.get("modalities", {})
                 rendered.append(f"{concept}:{count}:{modalities}")
-            print("[TopConcepts] " + " | ".join(rendered))
+            self._write("[TopConcepts] " + " | ".join(rendered))
 
         decision_debug = state.get("decision_debug", {}) or {}
         if decision_debug:
-            print(
+            self._write(
                 "[DecisionGate] "
                 f"path={decision_debug.get('decision_path')} "
                 f"engine={decision_debug.get('engine_available')} "
@@ -193,12 +212,12 @@ class Simulator:
                 f"mood={decision_debug.get('mood_tone')}"
             )
 
-        print(self._format_decision_line(decision))
-        print("-" * 72)
+        self._write(self._format_decision_line(decision))
+        self._write("-" * 72)
 
     def run_scenario(self, scenario_events, steps=50):
 
-        print("\n--- Simulation Start ---\n")
+        self._write("\n--- Simulation Start ---\n")
         previous_state = self.brain.get_state()
 
         try:
@@ -233,16 +252,14 @@ class Simulator:
                         perceived_events=[env_event, vision_event, hearing_event],
                     )
                 else:
-                    print(
-                        "State:",
-                        {
-                            "dopamine": round(state.get("dopamine", 0.0), 3),
-                            "cortisol": round(state.get("cortisol", 0.0), 3),
-                            "oxytocin": round(state.get("oxytocin", 0.0), 3),
-                            "serotonin": round(state.get("serotonin", 0.0), 3),
-                            "stage": state.get("development_stage"),
-                            "consciousness_score": round(state.get("consciousness_score", 0.0), 3),
-                        },
+                    self._write(
+                        "State: "
+                        f"dopamine={round(state.get('dopamine', 0.0), 3)} "
+                        f"cortisol={round(state.get('cortisol', 0.0), 3)} "
+                        f"oxytocin={round(state.get('oxytocin', 0.0), 3)} "
+                        f"serotonin={round(state.get('serotonin', 0.0), 3)} "
+                        f"stage={state.get('development_stage')} "
+                        f"consciousness_score={round(state.get('consciousness_score', 0.0), 3)}"
                     )
 
                 previous_state = state
@@ -254,5 +271,6 @@ class Simulator:
         finally:
             if self.memory_manager:
                 self.memory_manager.save(self.brain.get_state())
+            self.close_output()
 
-        print("\n--- Simulation End ---\n")
+        self._write("\n--- Simulation End ---\n")

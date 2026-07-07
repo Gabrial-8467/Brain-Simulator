@@ -39,6 +39,13 @@ def parse_arguments():
         help="Number of simulation cycles"
     )
 
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="output.txt",
+        help="Output file for simulation logs (default: output.txt)"
+    )
+
     return parser.parse_args()
 
 
@@ -101,8 +108,9 @@ def main():
         logger.info(
             f"Running structured learning simulation for {args.cycles} cycles"
         )
+        logger.info(f"Output will be written to: {args.output}")
 
-        simulator = Simulator(brain, memory_manager=memory_manager)
+        simulator = Simulator(brain, memory_manager=memory_manager, output_file=args.output)
         scenario = build_structured_learning_scenario(args.cycles)
 
         simulator.run_scenario(
