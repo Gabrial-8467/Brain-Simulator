@@ -265,8 +265,8 @@ Chemical fluctuations are computed step-by-step to prevent linear runaways, mimi
    *   **Dopamine**: If there are no positive valence perceptions in the current cycle, upward pulls are capped at `0.5` instead of `1.0`.
    *   **Oxytocin**: Decay is modulated by the agent's identity `social_value`:
        $$\text{Decay Multiplier} = \begin{cases} 
-          0.4 & \text{if } \text{social\_value} > 0.8 \\ 
-          0.7 & \text{if } \text{social\_value} > 0.6 \\ 
+          0.4 & \text{if social value} > 0.8 \\ 
+          0.7 & \text{if social value} > 0.6 \\ 
           1.0 & \text{otherwise} 
        \end{cases}$$
        If Oxytocin drops below 62.0, an extra positive correction pull is applied: $\text{Oxytocin} \leftarrow \text{Oxytocin} + (62.0 - \text{Oxytocin}) \times 0.04$.
@@ -278,7 +278,7 @@ Chemical fluctuations are computed step-by-step to prevent linear runaways, mimi
 
 3. **Stochastic Noise Insertion**:
    If not running in `--deterministic` mode, a random value is injected into each chemical:
-   $$\text{Value} \leftarrow \text{Value} + \text{Uniform}(-\text{noise\_limit}, \text{noise\_limit})$$
+   $$\text{Value} \leftarrow \text{Value} + \text{Uniform}(-\text{noise limit}, \text{noise limit})$$
    *(e.g., limit is 0.5 for dopamine, 0.4 for cortisol/serotonin, 0.3 for oxytocin)*.
 
 ---
@@ -306,24 +306,24 @@ Thoughts compete in a Global Workspace using an activation score evaluated at ru
 ### C. Belief Engine Schema Rules
 The `BeliefEngine` processes the last 45 events in its sliding window to compute statistical ratios. If a ratio matches the criteria below, the belief is active:
 
-*   **Criticism Schema**: Activated if `criticism_like_count >= 3` and $\frac{\text{criticism\_like\_count}}{\text{total\_events}} \ge 0.12$.
-    $$\text{Confidence}_{\text{target}} = 0.2 + (\text{criticism\_ratio} \times 1.9) + \min\left(0.2, \frac{\text{criticism\_count}}{25.0}\right)$$
-*   **Failure Schema**: Activated if `task_total >= 4` and $\frac{\text{failures}}{\text{task\_total}} > 0.55$.
-    $$\text{Confidence}_{\text{target}} = 0.25 + (\text{failure\_ratio} - 0.5) \times 1.3$$
-*   **Mastery/Effort Schema**: Activated if `task_total >= 4` and $\frac{\text{successes}}{\text{task\_total}} > 0.55$.
-    $$\text{Confidence}_{\text{target}} = 0.25 + (\text{success\_ratio} - 0.5) \times 1.3$$
-*   **Rejection Schema**: Activated if `social_attempts >= 4` and $\frac{\text{rejections}}{\text{social\_attempts}} > 0.52$.
-    $$\text{Confidence}_{\text{target}} = 0.2 + (\text{rejection\_ratio} \times 0.9)$$
-*   **Support Schema**: Activated if `social_attempts >= 4` and $\frac{\text{supports}}{\text{social\_attempts}} > 0.5$.
-    $$\text{Confidence}_{\text{target}} = 0.2 + (\text{support\_ratio} \times 0.8)$$
-*   **Threat Schema**: Activated if `threat_load >= 3` and $\frac{\text{threat\_load}}{\text{total\_events}} \ge 0.1$.
-    $$\text{Confidence}_{\text{target}} = 0.2 + (\text{threat\_ratio} \times 1.6)$$
+*   **Criticism Schema**: Activated if `criticism_like_count >= 3` and $\frac{\text{criticism-like count}}{\text{total events}} \ge 0.12$.
+    $$\text{Confidence}_{\text{target}} = 0.2 + (\text{criticism ratio} \times 1.9) + \min\left(0.2, \frac{\text{criticism count}}{25.0}\right)$$
+*   **Failure Schema**: Activated if `task_total >= 4` and $\frac{\text{failures}}{\text{task total}} > 0.55$.
+    $$\text{Confidence}_{\text{target}} = 0.25 + (\text{failure ratio} - 0.5) \times 1.3$$
+*   **Mastery/Effort Schema**: Activated if `task_total >= 4` and $\frac{\text{successes}}{\text{task total}} > 0.55$.
+    $$\text{Confidence}_{\text{target}} = 0.25 + (\text{success ratio} - 0.5) \times 1.3$$
+*   **Rejection Schema**: Activated if `social_attempts >= 4` and $\frac{\text{rejections}}{\text{social attempts}} > 0.52$.
+    $$\text{Confidence}_{\text{target}} = 0.2 + (\text{rejection ratio} \times 0.9)$$
+*   **Support Schema**: Activated if `social_attempts >= 4` and $\frac{\text{supports}}{\text{social attempts}} > 0.5$.
+    $$\text{Confidence}_{\text{target}} = 0.2 + (\text{support ratio} \times 0.8)$$
+*   **Threat Schema**: Activated if `threat_load >= 3` and $\frac{\text{threat load}}{\text{total events}} \ge 0.1$.
+    $$\text{Confidence}_{\text{target}} = 0.2 + (\text{threat ratio} \times 1.6)$$
 *   **Adaptation Schema**: Activated if `novelty_exposure >= 3` and $\text{successes} \ge \max(1, 0.7 \times \text{failures})$.
-    $$\text{Confidence}_{\text{target}} = 0.2 + \min\left(0.55, \frac{\text{novelty\_exposure}}{\text{total\_events}}\right)$$
+    $$\text{Confidence}_{\text{target}} = 0.2 + \min\left(0.55, \frac{\text{novelty exposure}}{\text{total events}}\right)$$
 
 **Confidence Smoothing Update:**
 Active belief confidences are smoothed across ticks:
-$$\text{Smooth Rate} = \text{smoothing\_factor} \times \left(1.0 + \min\left(0.3, \frac{\text{reflection\_depth}}{25.0}\right)\right)$$
+$$\text{Smooth Rate} = \text{smoothing factor} \times \left(1.0 + \min\left(0.3, \frac{\text{reflection depth}}{25.0}\right)\right)$$
 $$\text{Confidence}_{\text{new}} = \text{Confidence}_{\text{old}} + (\text{Confidence}_{\text{target}} - \text{Confidence}_{\text{old}}) \times \text{Smooth Rate}$$
 If a belief is no longer triggered by recent evidence, it decays: $\text{Confidence} \leftarrow \text{Confidence} \times 0.985$, and is deleted if it falls below `0.08`.
 
