@@ -43,6 +43,10 @@ def _cosine_similarity(v1: list[float], v2: list[float]) -> float:
 
 
 def generate_spontaneous(brain) -> None:
+    # 1. Gating check: Suppress spontaneous mind-wandering in Task Positive Network (TPN) mode
+    if getattr(brain, "network_mode", None) == "TPN":
+        return
+
     dopamine = brain.chemicals.get("dopamine", {}).get("value", 0) / 100.0
     # Higher dopamine increases spontaneous mind-wandering probability
     if random.random() > (0.4 + 0.4 * dopamine):
@@ -56,25 +60,50 @@ def generate_spontaneous(brain) -> None:
     best_similarity = 0.0
     best_event = None
 
-    # Scan autobiographical memory for associative cues (skip empty cycle steps)
+    # Scan autobiographical memory using Hopfield Network Attractor dynamics
     if hasattr(brain, "autobiography") and brain.autobiography.events:
         candidates = [
             ev for ev in brain.autobiography.events
             if ev.get("description") != "cycle_step" and "cycle_step" not in str(ev.get("description", ""))
         ]
         if candidates:
-            # Look at a selection of recent events
+            # Convert current state to binary query pattern
+            x = [1 if v >= 0.5 else -1 for v in curr_vec]
+            w = getattr(brain, "hopfield_weights", [[0.0]*9 for _ in range(9)])
+
+            # Converge query pattern onto Hopfield attractor state (up to 5 iterations)
+            for _ in range(5):
+                new_x = []
+                for i in range(9):
+                    val = sum(w[i][j] * x[j] for j in range(9))
+                    new_x.append(1 if val >= 0.0 else -1)
+                x = new_x
+
+            # Search autobiography for the event closest to the converged attractor
+            best_matches = []
+            best_match_count = -1
+
             for ev in candidates[-60:]:
                 ev_chems = ev.get("chemicals", {})
                 ev_id = ev.get("identity", {})
                 ev_vec = _get_state_vector(ev_chems, ev_id)
-                sim = _cosine_similarity(curr_vec, ev_vec)
-                if sim > best_similarity:
-                    best_similarity = sim
-                    best_event = ev
+                ev_pattern = [1 if v >= 0.5 else -1 for v in ev_vec]
+
+                # Calculate matching dimensions
+                matches = sum(1 for a, b in zip(x, ev_pattern) if a == b)
+                if matches > best_match_count:
+                    best_match_count = matches
+                    best_matches = [ev]
+                elif matches == best_match_count:
+                    best_matches.append(ev)
+
+            # If matches represent high overlap (at least 7/9 dimensions aligned)
+            if best_match_count >= 7:
+                best_event = best_matches[-1]
+                best_similarity = float(best_match_count) / 9.0
 
     # Replay memory if similarity exceeds cognitive threshold
-    if best_event and best_similarity >= 0.78:
+    if best_event and best_similarity >= 0.77:
         desc = best_event.get("description", "a past experience")
         # Strip prefixes for natural cognitive thought content
         clean_desc = desc.replace("perceived_", "").replace("worldview_", "")

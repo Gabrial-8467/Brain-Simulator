@@ -35,6 +35,34 @@ chemicals:
     decay: 0.025
     noise: 0.4
 
+  adrenaline:
+    min: 0
+    max: 100
+    baseline: 10
+    decay: 0.45
+    noise: 0.1
+
+  acetylcholine:
+    min: 0
+    max: 100
+    baseline: 30
+    decay: 0.1
+    noise: 0.1
+
+  melatonin:
+    min: 0
+    max: 100
+    baseline: 5
+    decay: 0.01
+    noise: 0.05
+
+  endorphins:
+    min: 0
+    max: 100
+    baseline: 10
+    decay: 0.2
+    noise: 0.05
+
 
 interactions:
 

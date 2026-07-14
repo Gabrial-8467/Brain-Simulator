@@ -22,6 +22,7 @@ class Thought:
     relevance_to_goals: float = 0.0
     recency: float = field(default_factory=lambda: time.time())
     metadata: Dict[str, Any] = field(default_factory=dict)
+    topic: str = ""
 
 
 class WorkspaceMethod:
@@ -90,7 +91,7 @@ class GlobalWorkspace:
         age = now - thought.recency
         return max(0.0, 1.0 - (age / 30.0))
 
-    def _select(self, norepinephrine: float = 50.0) -> Thought | None:
+    def _select(self, norepinephrine: float = 50.0, network_mode: str = "TPN", curiosity_engine: Any = None, active_goal: str | None = None) -> Thought | None:
         if not self._candidates:
             winner = self._last_winner
         else:
@@ -98,12 +99,37 @@ class GlobalWorkspace:
             activations: list[tuple[float, Thought]] = []
             for th in self._candidates:
                 recency_factor = self._recency_factor(th, now)
+                
+                # Apply boost to memory and internal thoughts under Default Mode Network (DMN)
+                dmn_boost = 1.3 if network_mode == "DMN" and th.source in {"memory", "internal"} else 1.0
+                
+                # Dynamic Curiosity modulation on novelty weight
+                c_topic = th.topic or th.metadata.get("category") or th.source
+                if curiosity_engine and hasattr(curiosity_engine, "get_curiosity_bonus"):
+                    c_bonus = curiosity_engine.get_curiosity_bonus(c_topic)
+                    th_novelty = 0.5 * th.novelty + 0.5 * c_bonus
+                else:
+                    th_novelty = th.novelty
+
+                # Dynamic Goal modulation on relevance weight
+                th_relevance = th.relevance_to_goals
+                if active_goal:
+                    goal_keywords = {
+                        "safety": ["threat", "unsafe", "danger", "protect", "hide", "refuse", "neutral"],
+                        "task_mastery": ["task", "solve", "attempt", "success", "challenge", "suggest", "wisdom"],
+                        "social_bond": ["caregiver", "user", "social", "attachment", "support", "friend", "bond", "talk"],
+                    }
+                    keywords = goal_keywords.get(active_goal, [])
+                    content_lower = th.content.lower()
+                    if any(kw in content_lower for kw in keywords) or th.source == "goal" or th.topic == active_goal:
+                        th_relevance = max(th_relevance, 0.9)
+
                 activation = (
                     self.WEIGHTS["emotional"] * th.emotional_weight
-                    + self.WEIGHTS["novelty"] * th.novelty
-                    + self.WEIGHTS["relevance"] * th.relevance_to_goals
+                    + self.WEIGHTS["novelty"] * th_novelty
+                    + self.WEIGHTS["relevance"] * th_relevance
                     + self.WEIGHTS["recency"] * recency_factor
-                )
+                ) * dmn_boost
                 activations.append((activation, th))
             winner = max(activations, key=lambda a: a[0])[1]
 

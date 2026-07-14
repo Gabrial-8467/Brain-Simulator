@@ -17,6 +17,9 @@ from core.internal_thoughts import generate_spontaneous
 from core.self_reflection import SelfReflection
 from chemicals.registry import ChemicalRegistry
 from bias.bias_engine import BiasEngine
+from development.attachment_system import AttachmentSystem
+from development.curiosity_engine import CuriosityEngine
+from development.goal_system import GoalSystem
 
 DEFAULT_BIAS_CONFIGS = {
     "negativity_bias": {
@@ -200,6 +203,13 @@ class VirtualBrain:
         self._step_perception_valences: list[float] = []
         self._step_perception_signals: list[dict[str, Any]] = []
         self._step_perception_novelty = 0.0
+        self.sleeping = False
+        self.sleep_ticks_left = 0
+        self.network_mode = "TPN"
+        self.hopfield_weights = [[0.0 for _ in range(9)] for _ in range(9)]
+        self.attachment_system = AttachmentSystem()
+        self.curiosity_engine = CuriosityEngine()
+        self.goal_system = GoalSystem()
         self._social_decay_hold_counter = 0
         self._high_emotion_window = deque(maxlen=10)
         self._decision_debug: dict[str, Any] = {}
@@ -294,7 +304,86 @@ class VirtualBrain:
         self.bias_engine = BiasEngine(DEFAULT_BIAS_CONFIGS, DEFAULT_BIAS_MAPPING)
         self._last_maturity = self.development.maturity
 
+    def _run_sleep_cycle(self) -> dict[str, Any]:
+        self.sleep_ticks_left -= 1
+        self.fatigue = max(0.0, self.fatigue - 0.25)
+        if "cortisol" in self.chemicals:
+            self.chemicals["cortisol"]["value"] = max(self._original_baselines["cortisol"], self.chemicals["cortisol"]["value"] - 8.0)
+        if "serotonin" in self.chemicals:
+            self.chemicals["serotonin"]["value"] = min(self.chemicals["serotonin"]["max"], self.chemicals["serotonin"]["value"] + 5.0)
+        if "norepinephrine" in self.chemicals:
+            self.chemicals["norepinephrine"]["value"] = max(self._original_baselines["norepinephrine"], self.chemicals["norepinephrine"]["value"] - 10.0)
+        if "melatonin" in self.chemicals:
+            self.chemicals["melatonin"]["value"] = max(self._original_baselines["melatonin"], self.chemicals["melatonin"]["value"] - 25.0)
+        self._clamp()
+
+        if self.sleep_ticks_left >= 2:
+            if hasattr(self, "autobiography") and self.autobiography.events:
+                candidates = [ev for ev in self.autobiography.events if ev.get("description") != "cycle_step"]
+                if candidates:
+                    significant = candidates[-15:]
+                    for ev in significant:
+                        meta = ev.get("metadata", {}) or {}
+                        action = meta.get("action") or "neutral"
+                        regret = float(meta.get("regret", 0.0))
+                        reward = 1.0 - (regret * 2.0)
+                        mood_tone = "neutral"
+                        if self.decision_engine and hasattr(self.decision_engine, "update_q_value"):
+                            self.decision_engine.update_q_value(mood_tone, action, reward)
+            if self.decision_engine and hasattr(self.decision_engine, "q_table"):
+                for tone in self.decision_engine.q_table:
+                    for act in self.decision_engine.q_table[tone]:
+                        self.decision_engine.q_table[tone][act] *= 0.98
+        else:
+            self.worldview.update_beliefs(self)
+            dream_text = "I am dreaming of floating through memory pathways..."
+            if hasattr(self, "autobiography") and self.autobiography.events:
+                candidates = [ev for ev in self.autobiography.events if ev.get("description") != "cycle_step"]
+                if candidates:
+                    ev = random.choice(candidates)
+                    dream_text = f"Dreaming of: {ev.get('description', 'memories')}"
+            dream_thought = Thought(
+                content=dream_text,
+                source="dream",
+                emotional_weight=0.5,
+                novelty=0.7,
+                relevance_to_goals=0.3
+            )
+            self.global_workspace.post(dream_thought)
+
+        if self.sleep_ticks_left <= 0:
+            self.sleeping = False
+
+        self.step_counter += 1
+        return {"action": "sleep", "probabilities": {"neutral": 1.0}, "feedback": {}, "asleep": True}
+
     def tick(self):
+        if self.sleeping:
+            return self._run_sleep_cycle()
+
+        # 1. Accumulate Melatonin
+        if "melatonin" in self.chemicals:
+            self.chemicals["melatonin"]["value"] = min(100.0, self.chemicals["melatonin"]["value"] + self.fatigue * 2.0)
+            self._clamp()
+
+        # 2. Check sleep triggers (fatigue threshold or Melatonin clock > 80.0)
+        has_melatonin_trigger = "melatonin" in self.chemicals and self.chemicals["melatonin"]["value"] > 80.0
+        if self.fatigue > 0.85 or has_melatonin_trigger:
+            self.sleeping = True
+            self.sleep_ticks_left = 5
+            return self._run_sleep_cycle()
+
+        self.fatigue = min(1.0, self.fatigue + 0.02)
+
+        # 3. Dynamic Acetylcholine (ACh) attention focus tracking
+        if "acetylcholine" in self.chemicals:
+            streak = getattr(self.global_workspace, "_streak", 0) or getattr(self.global_workspace, "streak", 0)
+            self.chemicals["acetylcholine"]["value"] = min(100.0, self.chemicals["acetylcholine"]["value"] + streak * 3.5)
+            self._clamp()
+            ach_val = self.chemicals["acetylcholine"]["value"] / 100.0
+            if self.decision_engine:
+                self.decision_engine.learning_rate = 0.05 + 0.15 * ach_val
+
         decision_output = None
         regret = 0.0
         prev_maturity = self.development.maturity
@@ -354,8 +443,18 @@ class VirtualBrain:
         self._encode_autobiography()
         belief_update = self._update_worldview()
 
+        # Salience Network updates cognitive mode (TPN vs. DMN)
+        ne_val = self.chemicals.get("norepinephrine", {}).get("value", 50.0)
+        if ne_val > 65.0 or self._step_perception_signals:
+            self.network_mode = "TPN"
+        else:
+            self.network_mode = "DMN"
+
         generate_spontaneous(self)
-        self.current_focus = self.global_workspace.select()
+        self.current_focus = self.global_workspace.select(
+            norepinephrine=ne_val,
+            network_mode=self.network_mode,
+        )
         focus_emotional = float(getattr(self.current_focus, "emotional_weight", 0.0) or 0.0)
         threshold = 0.7
         self._high_emotion_window.append(bool(self.current_focus and focus_emotional > threshold))
@@ -451,6 +550,20 @@ class VirtualBrain:
                     self._clamp()
 
         self._update_cognitive_growth(regret)
+
+        # Spike Endorphins on regret resolution and apply physiological buffering
+        if regret > 0.0 and "endorphins" in self.chemicals:
+            self.chemicals["endorphins"]["value"] = min(100.0, self.chemicals["endorphins"]["value"] + regret * 25.0)
+            self._clamp()
+
+        if "endorphins" in self.chemicals:
+            endorphin_val = self.chemicals["endorphins"]["value"]
+            if "cortisol" in self.chemicals:
+                self.chemicals["cortisol"]["value"] = max(0.0, self.chemicals["cortisol"]["value"] - endorphin_val * 0.15)
+            if "serotonin" in self.chemicals:
+                self.chemicals["serotonin"]["value"] = min(100.0, self.chemicals["serotonin"]["value"] + endorphin_val * 0.10)
+            self._clamp()
+
         stage_changed = self._update_stage_transition()
         self._periodic_reflection()
         if not stage_changed and (self.step_counter % self.narrative_update_interval == 0):
@@ -466,6 +579,33 @@ class VirtualBrain:
         self._enforce_identity_floors()
         self._monitor_concept_growth()
 
+        # Decay social attachment and goals
+        if hasattr(self, "attachment_system") and self.attachment_system:
+            self.attachment_system.decay()
+        if hasattr(self, "goal_system") and self.goal_system:
+            self.goal_system.decay()
+
+        # Dopaminergic reward for exploring curious thoughts
+        if self.current_focus and hasattr(self, "curiosity_engine") and self.curiosity_engine:
+            c_topic = self.current_focus.topic or self.current_focus.metadata.get("category") or self.current_focus.source
+            c_bonus = self.curiosity_engine.get_curiosity_bonus(c_topic)
+            if c_bonus > 0.6:
+                if "dopamine" in self.chemicals:
+                    self.chemicals["dopamine"]["value"] += c_bonus * 12.0
+                    self._clamp()
+
+        # Update active goal strength based on chosen action outcome
+        if decision_output and hasattr(self, "goal_system") and self.goal_system:
+            action = decision_output.get("action")
+            if action:
+                reward = 1.0 - regret
+                if action in {"support", "suggest"}:
+                    self.goal_system.create_or_update_goal("social_bond", reward)
+                if action in {"challenge", "suggest"}:
+                    self.goal_system.create_or_update_goal("task_mastery", reward)
+                if action in {"refuse", "neutral"}:
+                    self.goal_system.create_or_update_goal("safety", reward)
+
         self.step_counter += 1
         self.memory_manager.flush_pending()
         self._step_perception_valences = []
@@ -476,12 +616,23 @@ class VirtualBrain:
 
     def perceive(self, event: Any) -> None:
         """Process a meaningful experience event generated by the environment."""
-        def _read(name: str, default: Any):
+        def _read(name, default):
+            if hasattr(event, "get"):
+                return event.get(name, default)
             if hasattr(event, name):
                 return getattr(event, name)
             if isinstance(event, dict):
                 return event.get(name, default)
             return default
+
+        if self.sleeping:
+            category = str(_read("category", "")).strip().lower()
+            intensity = float(_read("intensity", 0.0))
+            if category == "threat_detected" and intensity >= 0.8:
+                self.sleeping = False
+                self.sleep_ticks_left = 0
+            else:
+                return
 
         modality = str(_read("modality", "experience")).strip().lower() or "experience"
         category = str(_read("category", "")).strip().lower()
@@ -497,6 +648,31 @@ class VirtualBrain:
 
         valence = max(-1.0, min(1.0, valence))
         intensity = max(0.0, min(1.0, intensity))
+
+        # 1. Observe event in Curiosity Engine
+        self.curiosity_engine.observe(category or modality)
+
+        # 2. Process Social Attachment updates and appraisals
+        reward_signal = max(0.0, valence)
+        stress_signal = max(0.0, -valence)
+        if source:
+            self.attachment_system.update(source, reward_signal, stress_signal)
+            attach_val = self.attachment_system.get_attachment(source)
+            if attach_val > 0.0:
+                # Buffer stress impact
+                if valence < 0.0:
+                    valence = valence * (1.0 - attach_val * 0.5)
+                    intensity = intensity * (1.0 - attach_val * 0.4)
+                # Boost oxytocin responses
+                if "oxytocin" in self.chemicals:
+                    self.chemicals["oxytocin"]["value"] += attach_val * 10.0
+                    self._clamp()
+
+        # 3. Process Adrenaline (Epinephrine) acute threat spikes
+        if category == "threat_detected" and "adrenaline" in self.chemicals:
+            self.chemicals["adrenaline"]["value"] = min(100.0, self.chemicals["adrenaline"]["value"] + intensity * 45.0)
+            self._clamp()
+
         expected_valence = self.worldview.expected_valence(category or modality)
         valence, intensity = self.worldview.adjust_appraisal(
             category=category or modality,
@@ -580,7 +756,7 @@ class VirtualBrain:
         elif isinstance(event, dict):
             metadata = dict(event)
 
-        self.autobiography.record_event(
+        self._record_memory_event(
             description=f"perceived_{modality}_{category or 'event'}: {content}",
             chemicals={k: v["value"] for k, v in self.chemicals.items()},
             identity_snapshot=self.identity.get_snapshot(),
@@ -888,7 +1064,7 @@ class VirtualBrain:
             if narrative and narrative != self.narrative_engine.get_current_narrative():
                 self.narrative_engine.current_narrative = narrative
                 self.worldview.mark_narrative_rewrite(self.step_counter)
-                self.autobiography.record_event(
+                self._record_memory_event(
                     description=f"worldview_narrative_rewrite: {narrative}",
                     chemicals={k: v["value"] for k, v in self.chemicals.items()},
                     identity_snapshot=self.identity.get_snapshot(),
@@ -952,7 +1128,7 @@ class VirtualBrain:
         self.narrative_engine.current_narrative = transition_text
         self._last_narrative_update_step = self.step_counter
 
-        self.autobiography.record_event(
+        self._record_memory_event(
             description=f"stage_transition:{old_stage}->{new_stage}",
             chemicals={k: v["value"] for k, v in self.chemicals.items()},
             identity_snapshot=self.identity.get_snapshot(),
@@ -1831,8 +2007,46 @@ class VirtualBrain:
             if chem_name == "cortisol":
                 data["value"] = min(100.0, data["value"])
 
-    def _encode_autobiography(self):
+    def _binarize_state(self, chemicals: dict, identity: dict) -> list[int]:
+        chems = ["dopamine", "cortisol", "oxytocin", "serotonin", "norepinephrine"]
+        traits = ["competence", "social_value", "resilience", "intelligence"]
+        vec = []
+        for c in chems:
+            val = chemicals.get(c, 50.0)
+            if isinstance(val, dict):
+                val = val.get("value", 50.0)
+            vec.append(1 if float(val) >= 50.0 else -1)
+        for t in traits:
+            val = identity.get(t, 0.5)
+            vec.append(1 if float(val) >= 0.5 else -1)
+        return vec
+
+    def _project_hebbian_learning(self, chemicals: dict, identity: dict):
+        p = self._binarize_state(chemicals, identity)
+        ach_val = 50.0
+        ach = chemicals.get("acetylcholine")
+        if ach:
+            ach_val = ach.get("value", 50.0) if isinstance(ach, dict) else float(ach)
+        ach_scale = ach_val / 100.0
+        update_multiplier = 0.3 + 1.2 * ach_scale
+
+        for i in range(9):
+            for j in range(9):
+                if i != j:
+                    self.hopfield_weights[i][j] += float(p[i] * p[j]) * update_multiplier
+
+    def _record_memory_event(self, description: str, chemicals: dict, identity_snapshot: dict, metadata: dict = None):
         self.autobiography.record_event(
+            description=description,
+            chemicals=chemicals,
+            identity_snapshot=identity_snapshot,
+            metadata=metadata,
+        )
+        if description != "cycle_step":
+            self._project_hebbian_learning(chemicals, identity_snapshot)
+
+    def _encode_autobiography(self):
+        self._record_memory_event(
             description="cycle_step",
             chemicals={k: v["value"] for k, v in self.chemicals.items()},
             identity_snapshot=self.identity.get_snapshot(),
@@ -1891,10 +2105,22 @@ class VirtualBrain:
             narrative=narrative,
         )
 
+        # Fetch attachment value of the active focus source
+        focus_source = "simulated"
+        if self.current_focus:
+            focus_source = self.current_focus.metadata.get("original_event", {}).get("source") or self.current_focus.source
+            if not focus_source or focus_source in {"memory", "internal", "emotion", "goal", "perception"}:
+                if self.recent_perceptions:
+                    focus_source = self.recent_perceptions[-1].get("source") or "simulated"
+        attach_val = 0.0
+        if hasattr(self, "attachment_system") and self.attachment_system:
+            attach_val = self.attachment_system.get_attachment(focus_source)
+
         state = {}
         state.update(chemical_values)
         state.update({f"identity_{k}": v for k, v in identity_snapshot.items()})
         state.update({f"development_{k}": v for k, v in development_snapshot.items()})
+        state["attachment_value"] = attach_val
 
         state.update(
             {
@@ -1924,6 +2150,10 @@ class VirtualBrain:
                 "consciousness_components": consciousness_components,
                 "bias_state": self.bias_engine.get_bias_state(),
                 "q_table": copy.deepcopy(self.decision_engine.q_table) if self.decision_engine and hasattr(self.decision_engine, "q_table") else {},
+                "hopfield_weights": copy.deepcopy(self.hopfield_weights),
+                "attachments": dict(self.attachment_system.attachments) if hasattr(self, "attachment_system") and self.attachment_system else {},
+                "curiosity_tracker": dict(self.curiosity_engine.novelty_tracker) if hasattr(self, "curiosity_engine") and self.curiosity_engine else {},
+                "goals": dict(self.goal_system.goals) if hasattr(self, "goal_system") and self.goal_system else {},
             }
         )
 
@@ -2053,6 +2283,22 @@ class VirtualBrain:
         q_table = state_dict.get("q_table")
         if q_table and self.decision_engine and hasattr(self.decision_engine, "q_table"):
             self.decision_engine.q_table = copy.deepcopy(q_table)
+
+        hopfield = state_dict.get("hopfield_weights")
+        if isinstance(hopfield, list):
+            self.hopfield_weights = copy.deepcopy(hopfield)
+
+        attachments = state_dict.get("attachments")
+        if isinstance(attachments, dict) and hasattr(self, "attachment_system") and self.attachment_system:
+            self.attachment_system.attachments = copy.deepcopy(attachments)
+
+        curiosity_tracker = state_dict.get("curiosity_tracker")
+        if isinstance(curiosity_tracker, dict) and hasattr(self, "curiosity_engine") and self.curiosity_engine:
+            self.curiosity_engine.novelty_tracker = copy.deepcopy(curiosity_tracker)
+
+        goals = state_dict.get("goals")
+        if isinstance(goals, dict) and hasattr(self, "goal_system") and self.goal_system:
+            self.goal_system.goals = copy.deepcopy(goals)
 
         self._clamp()
         self._enforce_identity_floors()

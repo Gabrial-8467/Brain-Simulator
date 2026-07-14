@@ -19,6 +19,7 @@ class DecisionEngine:
         base_probs = decision_config.get("base_probabilities", {act: 0.2 for act in actions})
         for tone in ["distressed", "tense", "calm", "confident", "hopeful", "neutral"]:
             self.q_table[tone] = {act: float(base_probs.get(act, 0.2)) for act in actions}
+        self.learning_rate = 0.1
 
     def update_q_value(self, state_tone: str, action: str, reward: float) -> float:
         state_tone = str(state_tone).lower()
@@ -30,8 +31,8 @@ class DecisionEngine:
         current_q = self.q_table[state_tone].get(action, 0.0)
         # Reward Prediction Error (RPE)
         rpe = reward - current_q
-        # Q-learning update rule with striatal learning rate of 0.1
-        self.q_table[state_tone][action] = current_q + 0.1 * rpe
+        # Q-learning update rule with dynamic striatal learning rate
+        self.q_table[state_tone][action] = current_q + self.learning_rate * rpe
         return rpe
 
     def decide(self, focus: Thought, state: dict | None = None, recent_valence_avg: float = 0.0, bias_engine: Any = None) -> dict:
@@ -99,6 +100,17 @@ class DecisionEngine:
             "challenge": (0.35 * stress_level) + (0.4 * max(0.0, -recent_valence_avg)),
         }
 
+        # Social Attachment bias modifiers
+        attachment_val = float(state.get("attachment_value", 0.0))
+        if attachment_val > 0.0:
+            base["support"] = base.get("support", 0.0) + 0.3 * attachment_val
+            base["suggest"] = base.get("suggest", 0.0) + 0.15 * attachment_val
+            base["refuse"] = base.get("refuse", 0.0) - 0.2 * attachment_val
+            base["neutral"] = base.get("neutral", 0.0) - 0.1 * attachment_val
+        elif attachment_val < 0.0:
+            base["support"] = base.get("support", 0.0) + 0.3 * attachment_val
+            base["refuse"] = base.get("refuse", 0.0) + 0.2 * abs(attachment_val)
+
         for action in list(base.keys()):
             base[action] += action_modifiers.get(action, 0.0)
 
@@ -107,6 +119,14 @@ class DecisionEngine:
         base["suggest"] = base.get("suggest", 0.0) + (0.22 * competence) + (0.14 * reward_level) - (0.2 * stress_level)
         base["neutral"] = base.get("neutral", 0.0) + (0.3 * stress_level) + (0.1 * (1.0 - emotional_salience))
         base["refuse"] = base.get("refuse", 0.0) + (0.4 * stress_level * (1.0 - social_norm)) + (0.22 * max(0.0, -recent_valence_avg))
+
+        # Acute Adrenaline (Epinephrine) flight-or-fight override
+        adrenaline_level = chemical_state.get("adrenaline", 10.0) / 100.0
+        if adrenaline_level > 0.45:
+            base["refuse"] = base.get("refuse", 0.0) + 0.6 * adrenaline_level
+            base["challenge"] = base.get("challenge", 0.0) + 0.4 * adrenaline_level
+            base["support"] = base.get("support", 0.0) - 0.4 * adrenaline_level
+            base["suggest"] = base.get("suggest", 0.0) - 0.4 * adrenaline_level
 
         if stress_level > 0.6:
             pressure = (stress_level - 0.6) / 0.4

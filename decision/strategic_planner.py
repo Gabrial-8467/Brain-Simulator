@@ -77,7 +77,35 @@ class StrategicPlanner:
         ) if brain.decision_engine else {}
 
         feedback = decision_output.get("feedback", {})
-        reward_score = sum(feedback.values())
+        
+        # Retrieve active goal from goal system to scale utility weights
+        active_goal = None
+        if hasattr(brain, "goal_system") and brain.goal_system:
+            active_goal = brain.goal_system.get_active_goal()
+
+        w_dopamine = 1.0
+        w_serotonin = 1.0
+        w_oxytocin = 1.0
+        w_cortisol = -1.0
+
+        if active_goal == "safety":
+            w_cortisol = -2.5
+            w_oxytocin = 0.5
+            w_dopamine = 0.5
+        elif active_goal == "task_mastery":
+            w_dopamine = 2.0
+            w_cortisol = -0.5
+        elif active_goal == "social_bond":
+            w_oxytocin = 2.0
+            w_serotonin = 1.5
+            w_cortisol = -0.8
+
+        reward_score = (
+            feedback.get("dopamine", 0.0) * w_dopamine +
+            feedback.get("serotonin", 0.0) * w_serotonin +
+            feedback.get("oxytocin", 0.0) * w_oxytocin +
+            feedback.get("cortisol", 0.0) * w_cortisol
+        )
 
         # Transition chemical state based on feedback
         next_chemicals = current_state.get("neurochemicals", {}).copy()
