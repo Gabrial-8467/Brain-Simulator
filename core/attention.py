@@ -91,7 +91,7 @@ class GlobalWorkspace:
         age = now - thought.recency
         return max(0.0, 1.0 - (age / 30.0))
 
-    def _select(self, norepinephrine: float = 50.0, network_mode: str = "TPN", curiosity_engine: Any = None, active_goal: str | None = None) -> Thought | None:
+    def _select(self, norepinephrine: float = 50.0, network_mode: str = "TPN", curiosity_engine: Any = None, active_goal: str | None = None, love_score: float = 0.0, loved_source: str | None = None) -> Thought | None:
         if not self._candidates:
             winner = self._last_winner
         else:
@@ -123,6 +123,11 @@ class GlobalWorkspace:
                     content_lower = th.content.lower()
                     if any(kw in content_lower for kw in keywords) or th.source == "goal" or th.topic == active_goal:
                         th_relevance = max(th_relevance, 0.9)
+
+                # Love infatuation boost
+                if love_score > 0.0 and loved_source:
+                    if th.source == loved_source or loved_source.lower() in th.content.lower():
+                        th_relevance = min(1.0, th_relevance + 0.4 * love_score)
 
                 activation = (
                     self.WEIGHTS["emotional"] * th.emotional_weight

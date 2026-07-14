@@ -100,6 +100,12 @@ class StrategicPlanner:
             w_serotonin = 1.5
             w_cortisol = -0.8
 
+        # Scale rewards if Love Emotion is active (love_score > 0.5)
+        love_score = float(current_state.get("love_score", 0.0))
+        if love_score > 0.5:
+            w_oxytocin = 3.0
+            w_cortisol = w_cortisol / 3.0
+
         reward_score = (
             feedback.get("dopamine", 0.0) * w_dopamine +
             feedback.get("serotonin", 0.0) * w_serotonin +

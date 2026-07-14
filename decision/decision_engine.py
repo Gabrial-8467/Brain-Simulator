@@ -120,6 +120,13 @@ class DecisionEngine:
         base["neutral"] = base.get("neutral", 0.0) + (0.3 * stress_level) + (0.1 * (1.0 - emotional_salience))
         base["refuse"] = base.get("refuse", 0.0) + (0.4 * stress_level * (1.0 - social_norm)) + (0.22 * max(0.0, -recent_valence_avg))
 
+        # Love Emotion action probability bias
+        love_score = float(state.get("love_score", 0.0))
+        if love_score > 0.0:
+            base["support"] = base.get("support", 0.0) + 0.4 * love_score
+            base["suggest"] = base.get("suggest", 0.0) + 0.2 * love_score
+            base["refuse"] = base.get("refuse", 0.0) - 0.3 * love_score
+
         # Acute Adrenaline (Epinephrine) flight-or-fight override
         adrenaline_level = chemical_state.get("adrenaline", 10.0) / 100.0
         if adrenaline_level > 0.45:

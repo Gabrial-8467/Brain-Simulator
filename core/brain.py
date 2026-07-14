@@ -96,6 +96,8 @@ class VirtualBrain:
         self.deterministic = deterministic
         self.feedback_multiplier = feedback_multiplier
         self.decision_feedback_scale = 0.45
+        self.love_score = 0.0
+        self.loved_source = None
         self.decision_engine = decision_engine
         self.global_workspace = global_workspace or GlobalWorkspace.get_default()
 
@@ -454,7 +456,22 @@ class VirtualBrain:
         self.current_focus = self.global_workspace.select(
             norepinephrine=ne_val,
             network_mode=self.network_mode,
+            love_score=self.love_score,
+            loved_source=self.loved_source,
         )
+
+        # Calculate active Love Score based on current focus and chemical levels
+        self.love_score = 0.0
+        self.loved_source = None
+        if self.current_focus and hasattr(self, "attachment_system") and self.attachment_system:
+            c_source = self.current_focus.source or ""
+            attach = self.attachment_system.get_attachment(c_source)
+            if attach > 0.6:
+                oxt = self.chemicals["oxytocin"]["value"] if "oxytocin" in self.chemicals else 0.0
+                da = self.chemicals["dopamine"]["value"] if "dopamine" in self.chemicals else 0.0
+                if oxt > 60.0 and da > 60.0:
+                    self.love_score = attach * (oxt / 100.0) * (da / 100.0)
+                    self.loved_source = c_source
         focus_emotional = float(getattr(self.current_focus, "emotional_weight", 0.0) or 0.0)
         threshold = 0.7
         self._high_emotion_window.append(bool(self.current_focus and focus_emotional > threshold))
@@ -672,6 +689,12 @@ class VirtualBrain:
         if category == "threat_detected" and "adrenaline" in self.chemicals:
             self.chemicals["adrenaline"]["value"] = min(100.0, self.chemicals["adrenaline"]["value"] + intensity * 45.0)
             self._clamp()
+
+        # 4. Apply Love Emotion additional cortisol stress buffering
+        if self.love_score > 0.5:
+            if valence < 0.0:
+                valence = valence * (1.0 - self.love_score * 0.7)
+                intensity = intensity * (1.0 - self.love_score * 0.6)
 
         expected_valence = self.worldview.expected_valence(category or modality)
         valence, intensity = self.worldview.adjust_appraisal(
@@ -2151,6 +2174,8 @@ class VirtualBrain:
                 "bias_state": self.bias_engine.get_bias_state(),
                 "q_table": copy.deepcopy(self.decision_engine.q_table) if self.decision_engine and hasattr(self.decision_engine, "q_table") else {},
                 "hopfield_weights": copy.deepcopy(self.hopfield_weights),
+                "love_score": self.love_score,
+                "loved_source": self.loved_source,
                 "attachments": dict(self.attachment_system.attachments) if hasattr(self, "attachment_system") and self.attachment_system else {},
                 "curiosity_tracker": dict(self.curiosity_engine.novelty_tracker) if hasattr(self, "curiosity_engine") and self.curiosity_engine else {},
                 "goals": dict(self.goal_system.goals) if hasattr(self, "goal_system") and self.goal_system else {},
@@ -2283,6 +2308,9 @@ class VirtualBrain:
         q_table = state_dict.get("q_table")
         if q_table and self.decision_engine and hasattr(self.decision_engine, "q_table"):
             self.decision_engine.q_table = copy.deepcopy(q_table)
+
+        self.love_score = float(state_dict.get("love_score", 0.0))
+        self.loved_source = state_dict.get("loved_source")
 
         hopfield = state_dict.get("hopfield_weights")
         if isinstance(hopfield, list):
