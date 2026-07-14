@@ -113,4 +113,4 @@ class AutobiographicalMemory:
                 "recalled_source": (ev.get("metadata", {}) or {}).get("source"),
             },
         )
-        GlobalWorkspace.post(th)
+        (getattr(brain, "global_workspace", None) or GlobalWorkspace).post(th)

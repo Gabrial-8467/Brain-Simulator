@@ -28,11 +28,19 @@ chemicals:
     decay: 0.02
     noise: 0.4
 
+  norepinephrine:
+    min: 0
+    max: 100
+    baseline: 50
+    decay: 0.025
+    noise: 0.4
+
 
 interactions:
 
   cortisol:
     dopamine: -0.0008
+    norepinephrine: 0.0005
 
   serotonin:
     cortisol: -0.0005
@@ -42,6 +50,9 @@ interactions:
 
   dopamine:
     serotonin: 0.0003
+
+  norepinephrine:
+    cortisol: 0.0003
 
 
 global_settings:

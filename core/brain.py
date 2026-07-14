@@ -4,6 +4,7 @@ import os
 import random
 import re
 import time
+import copy
 from collections import deque
 from dataclasses import asdict
 from typing import Any
@@ -14,6 +15,58 @@ from core.development import DynamicDevelopment
 from core.identity import DynamicIdentity
 from core.internal_thoughts import generate_spontaneous
 from core.self_reflection import SelfReflection
+from chemicals.registry import ChemicalRegistry
+from bias.bias_engine import BiasEngine
+
+DEFAULT_BIAS_CONFIGS = {
+    "negativity_bias": {
+        "core_range": 0.1,
+        "min": -1.0,
+        "max": 1.0,
+        "decay": 0.0003,
+        "delta_threshold": 5.0,
+        "imprint_factor": 0.001,
+    },
+    "optimism_bias": {
+        "core_range": 0.1,
+        "min": -1.0,
+        "max": 1.0,
+        "decay": 0.0003,
+        "delta_threshold": 5.0,
+        "imprint_factor": 0.001,
+    }
+}
+
+DEFAULT_BIAS_MAPPING = {
+    "negativity_bias": {
+        "imprint_from": ["cortisol"],
+        "baseline_shift": {
+            "cortisol": 5.0
+        },
+        "reaction_scale": {
+            "cortisol": 0.15
+        },
+        "decision_bias": {
+            "refuse": 0.05,
+            "neutral": 0.03,
+            "support": -0.05
+        }
+    },
+    "optimism_bias": {
+        "imprint_from": ["dopamine"],
+        "baseline_shift": {
+            "dopamine": 3.0,
+            "serotonin": 2.0
+        },
+        "reaction_scale": {
+            "dopamine": 0.1
+        },
+        "decision_bias": {
+            "support": 0.05,
+            "suggest": 0.04
+        }
+    }
+}
 
 from cognition.autobiographical_memory import AutobiographicalMemory
 from cognition.belief_engine import BeliefEngine
@@ -35,11 +88,13 @@ class VirtualBrain:
         deterministic: bool = False,
         memory_storage_path: str | None = None,
         worldview_config: dict | None = None,
+        global_workspace: Any = None,
     ):
         self.deterministic = deterministic
         self.feedback_multiplier = feedback_multiplier
         self.decision_feedback_scale = 0.45
         self.decision_engine = decision_engine
+        self.global_workspace = global_workspace or GlobalWorkspace.get_default()
 
         self.identity = DynamicIdentity()
         self.development = DynamicDevelopment()
@@ -144,6 +199,7 @@ class VirtualBrain:
         self.step_counter = 0
         self._step_perception_valences: list[float] = []
         self._step_perception_signals: list[dict[str, Any]] = []
+        self._step_perception_novelty = 0.0
         self._social_decay_hold_counter = 0
         self._high_emotion_window = deque(maxlen=10)
         self._decision_debug: dict[str, Any] = {}
@@ -233,16 +289,9 @@ class VirtualBrain:
         self._narrative_milestone_index = -1
         self._last_narrative_update_step = -1000
 
-        self.chemicals = {}
-        for name, config in chemical_configs.items():
-            self.chemicals[name] = {
-                "value": config["baseline"],
-                "baseline": config["baseline"],
-                "min": config["min"],
-                "max": config["max"],
-                "decay": config["decay"],
-                "noise": config["noise"],
-            }
+        self.chemicals = ChemicalRegistry(chemical_configs)
+        self._original_baselines = {name: float(config["baseline"]) for name, config in chemical_configs.items()}
+        self.bias_engine = BiasEngine(DEFAULT_BIAS_CONFIGS, DEFAULT_BIAS_MAPPING)
         self._last_maturity = self.development.maturity
 
     def tick(self):
@@ -250,10 +299,29 @@ class VirtualBrain:
         regret = 0.0
         prev_maturity = self.development.maturity
 
+        for name in self.chemicals.keys():
+            self.chemicals[name]["baseline"] = self._original_baselines[name]
+
+        conscious_values = {k: v["value"] for k, v in self.chemicals.items()}
+        baseline_values = {k: self._original_baselines[k] for k in self.chemicals.keys()}
+        self.bias_engine.update_from_conscious(conscious_values, baseline_values)
+        self.bias_engine.apply_baseline_shift(self.chemicals)
+
         self._apply_interactions()
         self._apply_homeostasis()
         self._apply_noise()
         self._clamp()
+
+        if "norepinephrine" in self.chemicals:
+            ne_val = self.chemicals["norepinephrine"]["value"]
+            ne_baseline = self.chemicals["norepinephrine"]["baseline"]
+            ne_decay = self.chemicals["norepinephrine"]["decay"]
+            ne_val += (ne_baseline - ne_val) * ne_decay
+            ne_val += self._step_perception_novelty * 15.0
+            cort_delta = max(0.0, self.chemicals["cortisol"]["value"] - self.previous_chem_snapshot.get("cortisol", 40.0))
+            ne_val += cort_delta * 0.25
+            self.chemicals["norepinephrine"]["value"] = max(0.0, min(100.0, ne_val))
+            self._clamp()
 
         serotonin = self.chemicals.get("serotonin", {}).get("value", 0.0)
         cortisol = self.chemicals.get("cortisol", {}).get("value", 0.0)
@@ -287,7 +355,7 @@ class VirtualBrain:
         belief_update = self._update_worldview()
 
         generate_spontaneous(self)
-        self.current_focus = GlobalWorkspace.select()
+        self.current_focus = self.global_workspace.select()
         focus_emotional = float(getattr(self.current_focus, "emotional_weight", 0.0) or 0.0)
         threshold = 0.7
         self._high_emotion_window.append(bool(self.current_focus and focus_emotional > threshold))
@@ -333,6 +401,7 @@ class VirtualBrain:
                 self.current_focus,
                 state=decision_state,
                 recent_valence_avg=recent_valence_avg,
+                bias_engine=self.bias_engine,
             )
             self._decision_debug["decision_path"] = "model"
 
@@ -372,6 +441,15 @@ class VirtualBrain:
                     intensity=float(getattr(self.current_focus, "emotional_weight", 0.5) or 0.5),
                 )
 
+                if self.decision_engine and hasattr(self.decision_engine, "update_q_value"):
+                    reward = 1.0 - (regret * 2.0)
+                    mood_tone = str(self.worldview.mood_state.get("tone", "neutral")).lower()
+                    rpe = self.decision_engine.update_q_value(mood_tone, action, reward)
+                    dopamine_change = rpe * 5.0
+                    dopamine_change = max(-10.0, min(10.0, dopamine_change))
+                    self.chemicals["dopamine"]["value"] = max(0.0, min(100.0, self.chemicals["dopamine"]["value"] + dopamine_change))
+                    self._clamp()
+
         self._update_cognitive_growth(regret)
         stage_changed = self._update_stage_transition()
         self._periodic_reflection()
@@ -392,6 +470,7 @@ class VirtualBrain:
         self.memory_manager.flush_pending()
         self._step_perception_valences = []
         self._step_perception_signals = []
+        self._step_perception_novelty = 0.0
         self._step_adversity_intensity = 0.0
         return decision_output
 
@@ -451,6 +530,7 @@ class VirtualBrain:
             valence=valence,
             provided_scene=scene_input,
         )
+        self._step_perception_novelty = max(self._step_perception_novelty, float(scene.get("novelty", 0.0)))
         self.recent_perceptions.append(
             {
                 "modality": modality,
@@ -540,7 +620,7 @@ class VirtualBrain:
                 "scene": scene,
             },
         )
-        GlobalWorkspace.post(event_thought)
+        self.global_workspace.post(event_thought)
 
     def _effects_from_event(self, modality: str, category: str, valence: float, intensity: float) -> dict:
         positive = max(0.0, valence)
@@ -655,7 +735,8 @@ class VirtualBrain:
 
         for chem, delta in effects.items():
             if chem in self.chemicals:
-                bounded = max(-8.0, min(8.0, float(delta)))
+                scaled_delta = self.bias_engine.scale_reaction(chem, float(delta))
+                bounded = max(-8.0, min(8.0, scaled_delta))
                 if chem in ["dopamine", "serotonin"] and bounded < 0:
                     bounded *= 1 - effective_resilience * 0.5
                 if chem == "cortisol":
@@ -759,7 +840,7 @@ class VirtualBrain:
             novelty=0.6,
             relevance_to_goals=0.6,
         )
-        GlobalWorkspace.post(reflect_thought)
+        self.global_workspace.post(reflect_thought)
 
     def _summarize_recent_perceptions(self, recent_perceptions: list[dict]) -> str:
         counts: dict[str, int] = {}
@@ -816,7 +897,7 @@ class VirtualBrain:
                         "belief_shift": belief_update.get("max_conf_shift", 0.0),
                     },
                 )
-                GlobalWorkspace.post(
+                self.global_workspace.post(
                     Thought(
                         content=f"I revised my worldview narrative: {narrative}",
                         source="internal",
@@ -884,7 +965,7 @@ class VirtualBrain:
             novelty=0.9,
             relevance_to_goals=0.8,
         )
-        GlobalWorkspace.post(transition_thought)
+        self.global_workspace.post(transition_thought)
         return True
 
     def _apply_social_value_decay(self) -> None:
@@ -1783,7 +1864,7 @@ class VirtualBrain:
                 novelty=0.2,
                 relevance_to_goals=0.4,
             )
-            GlobalWorkspace.post(narrative_thought)
+            self.global_workspace.post(narrative_thought)
 
     def get_response_latency(self):
         cortisol = self.chemicals["cortisol"]["value"]
@@ -1841,6 +1922,8 @@ class VirtualBrain:
                 "mood_state": worldview_state.get("mood_state", {}),
                 "worldview": worldview_state,
                 "consciousness_components": consciousness_components,
+                "bias_state": self.bias_engine.get_bias_state(),
+                "q_table": copy.deepcopy(self.decision_engine.q_table) if self.decision_engine and hasattr(self.decision_engine, "q_table") else {},
             }
         )
 
@@ -1960,6 +2043,16 @@ class VirtualBrain:
                 "mood_state": state_dict.get("mood_state", {}),
             }
         self.worldview.load_state(worldview_payload)
+
+        bias_state = state_dict.get("bias_state")
+        if bias_state and hasattr(self, "bias_engine"):
+            for bias_name, val in bias_state.items():
+                if bias_name in self.bias_engine.biases:
+                    self.bias_engine.biases[bias_name].value = float(val)
+
+        q_table = state_dict.get("q_table")
+        if q_table and self.decision_engine and hasattr(self.decision_engine, "q_table"):
+            self.decision_engine.q_table = copy.deepcopy(q_table)
 
         self._clamp()
         self._enforce_identity_floors()

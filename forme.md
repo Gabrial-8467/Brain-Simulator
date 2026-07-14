@@ -68,11 +68,13 @@ graph TD
 
 Here is a detailed breakdown of what features are implemented in the project and how they work programmatically:
 
-### A. Core Neurochemistry & Homeostasis (`core/brain.py` & `core/interactions.py`)
-The agent's internal state is governed by four neurochemicals: **Dopamine**, **Cortisol**, **Oxytocin**, and **Serotonin**. 
-- **Interactions**: Every cycle, chemicals influence each other according to a matrix defined in [chemicals.yaml](file:///D:/Brain-Simulator/config/chemicals.yaml) (e.g., Cortisol suppresses Dopamine; Serotonin and Oxytocin buffer Cortisol).
-- **Homeostasis**: Values are gradually pulled back to baseline settings. For instance, Serotonin regulates other chemicals, and Oxytocin provides emotional buffering.
-- **Clamping & Noise**: Random fluctuations (noise) are added (unless deterministic mode is on), and values are clamped strictly between `[0, 100]`.
+### A. Core Neurochemistry & Homeostasis (`core/brain.py`, `chemicals/` & `core/interactions.py`)
+The agent's internal state is governed by five neurochemicals: **Dopamine**, **Cortisol**, **Oxytocin**, **Serotonin**, and **Norepinephrine**.
+* **Chemical Objects & Registry**: The chemicals are represented as **[Chemical](file:///D:/Brain-Simulator/chemicals/models.py#L3)** and **[ChemicalRegistry](file:///D:/Brain-Simulator/chemicals/registry.py#L4)** objects, implementing a dict-like interface for backward compatibility.
+* **Interactions**: Every cycle, chemicals influence each other according to a matrix defined in [chemicals.yaml](file:///D:/Brain-Simulator/config/chemicals.yaml) (e.g., Cortisol suppresses Dopamine; Serotonin and Oxytocin buffer Cortisol).
+* **Norepinephrine Dynamics**: Modulates global arousal and sensory gating. It decays toward its baseline, spikes on perceived scene novelty, and rises in response to cortisol increases.
+* **Homeostasis**: Values are gradually pulled back to baseline settings. For instance, Serotonin regulates other chemicals, and Oxytocin provides emotional buffering.
+* **Clamping & Noise**: Random fluctuations (noise) are added (unless deterministic mode is on), and values are clamped strictly between `[0, 100]`.
 
 ### B. Dynamic Identity & Psychological Traits (`core/identity.py`)
 Tracks four key psychological traits: **Competence**, **Social Value**, **Resilience**, and **Intelligence**.
@@ -91,7 +93,8 @@ Implements Bernard Baars' **Global Workspace Theory**.
 - **Selection Formula**: Each candidate's activation score is calculated using:
   $$\text{Activation} = 0.35 \cdot E + 0.20 \cdot N + 0.25 \cdot R + 0.20 \cdot \left(1.0 - \frac{\text{Age}}{30.0}\right)$$
   Where $E$ is Emotional Weight, $N$ is Novelty, $R$ is Relevance to Goals, and Age is the time elapsed since the thought was posted.
-- **Focus Streak**: If the same thought wins consecutively, the agent's focus streak increases, contributing to a higher consciousness score.
+- **Concurrent Workspace Instances**: Workspaces are now instantiable and thread-safe to support concurrent simulations. Property and method descriptors (`WorkspaceProperty`, `WorkspaceMethod`) route requests to the instance or fallback to a default singleton.
+- **Norepinephrine Gating**: If Norepinephrine is high (hyper-arousal), focus stability drops (hyper-arousal penalty) and distraction events randomly decay the focus streak.
 
 ### E. Rule-Based Belief Engine (`cognition/belief_engine.py`)
 Computes statistical schemas and mood states over a sliding window of the last 45 events:
@@ -108,8 +111,13 @@ Evaluates the choices made by the Decision Engine.
 
 ### G. Decision Engine & Look-Ahead Strategic Planner (`decision/`)
 Controls what the agent does in response to its focus.
-- **Decision Engine**: Modifies baseline action probabilities (Support, Challenge, Suggest, Refuse, Neutral) using the current neurochemicals, mood state, and active beliefs. For instance, high cortisol and distressed mood amplify the probability of "refuse" and "neutral."
-- **Strategic Planner**: Uses recursive tree search (`depth = 2`) by cloning the brain state using `copy.deepcopy` to simulate future ticks. It chooses the action path that yields the highest cumulative expected chemical rewards (dopamine, serotonin, oxytocin) while minimizing cortisol spikes.
+- **Decision Engine**: Modifies baseline action probabilities using neurochemicals, mood state, active beliefs, and striatal RL Q-values.
+- **Striatal RL Loop**: Maps the 6 discrete mood states to action $Q$-values. The influence of Q-values is gated by a Norepinephrine temperature parameter (high NE drives exploration, low NE drives exploitation). Updates are performed via Reward Prediction Errors (RPE), triggering phasic dopamine bursts or dips.
+- **Strategic Planner**: Uses recursive tree search (`depth = 2`) to project state transitions mathematically on lightweight state dictionaries, completely avoiding `copy.deepcopy` bottlenecks.
+
+### H. Hippocampal Replay & Mind-Wandering (`core/internal_thoughts.py`)
+- **Associative Memory Replay**: Spontaneous thought generation computes the cosine similarity between the current neurochemical/identity state vector and the snapshots of past autobiographical memory events.
+- **Replay Gating**: If similarity exceeds `0.78`, the matching past event is replayed in the workspace, carrying its original emotional weight; otherwise, it falls back to a standard curiosity template.
 
 ---
 
@@ -119,10 +127,11 @@ To excel in interviews, you must be able to translate code classes into biologic
 
 | Biological Feature | Anatomical / Physiological Basis | Computational Implementation in Code |
 | :--- | :--- | :--- |
-| **Dopamine** | Midbrain (VTA/SNc). Signals reward prediction error, motivation, reinforcement learning. | Modeled in [chemicals.yaml](file:///D:/Brain-Simulator/config/chemicals.yaml). Drives action "suggest", boosts novelty weight, triggers internal curiosity thoughts. |
+| **Dopamine** | Midbrain (VTA/SNc). Signals reward prediction error, motivation, reinforcement learning. | Modeled in [chemicals.yaml](file:///D:/Brain-Simulator/config/chemicals.yaml). Phasic updates based on Reward Prediction Errors (RPE) update striatal Q-values. Drives internal thought generation and action suggestions. |
 | **Cortisol** | Adrenal cortex (HPA axis). Stress response, mobilizes energy, inhibits PFC cognitive control. | Modeled in config. Amplifies "refuse" and "neutral", diminishes "support", lowers resilience, halts developmental progress. |
 | **Oxytocin** | Hypothalamus / Pituitary. Social trust, bonding, anxiolytic effect (buffers amygdala). | Modeled in config. Direct negative interaction weight with cortisol; increases probability of "support" actions. |
 | **Serotonin** | Brainstem raphe nuclei. Mood stabilization, impulse control, satiety. | Modeled in config. Buffers cortisol fluctuations, scales down risk tolerance, boosts prosocial action weights. |
+| **Norepinephrine** | Locus Coeruleus (pons/brainstem). Modulates sensory signal-to-noise ratio, hyper-arousal, and exploration vs exploitation. | Spikes on novelty and cortisol rises. Gates decision exploration temperature and penalizes attention focus stability in the workspace. |
 | **Global Workspace (Attention)** | Frontoparietal network & thalamocortical loops. Broadcasts relevant stimuli to the whole cortex. | [GlobalWorkspace](file:///D:/Brain-Simulator/core/attention.py) class. A competitive queue where thoughts compete via emotional, novelty, goal, and recency weights. |
 | **Episodic Memory** | Hippocampus & medial temporal lobe. Stores specific personal experiences. | [AutobiographicalMemory](file:///D:/Brain-Simulator/cognition/autobiographical_memory.py) class. Stores event logs, chemical snapshots, and identity states. Serializes to JSON. |
 | **Cognitive Schemas** | Prefrontal & association cortices. Belief frameworks constructed from repeated events. | [BeliefEngine](file:///D:/Brain-Simulator/cognition/belief_engine.py). Computes statistical thresholds over a sliding window of events to activate cognitive rules. |
@@ -204,20 +213,19 @@ Prepare for technical interviews with these highly specific questions and answer
 
 ### Q5: "How does the Strategic Planner perform look-ahead planning without causing side-effects to the active brain state?"
 > **Answer:** 
-> To evaluate potential futures, the `StrategicPlanner` in `decision/strategic_planner.py` uses `copy.deepcopy(brain)` to duplicate the entire brain state. 
-> It then executes hypothetical actions on this cloned state and observes the resulting simulated chemical shifts and feedback rewards over a recursive tree search up to a depth of `2`. Because these updates occur on the deep-copied state, the actual active brain parameters remain completely unaffected by the planning process.
+> The `StrategicPlanner` in `decision/strategic_planner.py` uses mathematical transitions projected onto lightweight state dictionaries (containing chemical values, active baseline configurations, and identity snapshots).
+> It simulates the outcomes of actions over a tree search up to a depth of `2` entirely on these decoupled dictionaries, completely avoiding CPU-intensive `copy.deepcopy(brain)` operations. This isolation ensures the planning loops leave the active brain instance parameters completely untouched.
 
 ---
 
 ### Q6: "What are the decoupled/staged systems in this codebase, and why are they there?"
 > **Answer:** 
-> Several systems are implemented but not fully wired into the main active tick loop of `core/brain.py`. These represent architectural expansion hooks designed for modular scalability:
-> 1. **`bias/bias_engine.py`**: A module that captures conscious state deviations to imprint permanent, slow-drift baseline shifts on neurochemicals (representing slow temperament changes).
-> 2. **`development/attachment_system.py`**: Tracks social bonding values with specific caregivers or interaction sources.
-> 3. **`development/curiosity_engine.py`**: Tracks the frequency of contexts to calculate a curiosity bonus that feeds into candidate thoughts.
-> 4. **`development/goal_system.py`**: Manages the accumulation, decay, and selection of long-term active goals.
+> Background evolutionary drives and social modeling systems are kept decoupled from the active tick loop to keep homeostatic cycles simple and testable:
+> 1. **`development/attachment_system.py`**: Tracks social bonding values with caregivers or social interaction sources.
+> 2. **`development/curiosity_engine.py`**: Tracks context encounter frequency to calculate curiosity bonuses for preconscious thoughts.
+> 3. **`development/goal_system.py`**: Manages the accumulation, decay, and selection of active goals.
 > 
-> By keeping these systems decoupled, we can test core homeostatic cycles independently and integrate complex behavioral structures as needed.
+> *Note: The `BiasEngine` was previously decoupled, but has since been fully integrated into the perception appraisal and homeostatic baseline loops.*
 
 ---
 

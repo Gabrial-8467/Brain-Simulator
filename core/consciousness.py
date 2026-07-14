@@ -11,8 +11,13 @@ class Consciousness:
         self.last_components: dict[str, float] = {}
 
     def compute_score(self, brain: Any) -> float:
-        stability = GlobalWorkspace.focus_stability()
-        streak_bonus = min(0.5, (GlobalWorkspace._streak // 5) * 0.1)
+        workspace = getattr(brain, "global_workspace", None) or GlobalWorkspace
+        ne_val = 50.0
+        if hasattr(brain, "chemicals") and "norepinephrine" in brain.chemicals:
+            ne_val = float(brain.chemicals["norepinephrine"]["value"])
+        stability = workspace.focus_stability(norepinephrine=ne_val)
+        streak = getattr(workspace, "_streak", getattr(workspace, "streak", 0))
+        streak_bonus = min(0.5, (streak // 5) * 0.1)
         experience_points = getattr(getattr(brain, "development", None), "experience_points", 0)
         development_bonus = min(0.35, experience_points / 1000.0)
         reflection_bonus = min(
@@ -34,7 +39,7 @@ class Consciousness:
         novelty_bonus = min(0.2, novelty_weighted * 0.05)
 
         source_bonus = 0.0
-        focus = GlobalWorkspace.current_focus()
+        focus = workspace.current_focus()
         if focus and focus.source in ("memory", "goal"):
             source_bonus = 0.1
 

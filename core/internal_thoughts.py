@@ -1,4 +1,5 @@
 import random
+import math
 
 from .attention import GlobalWorkspace, Thought
 
@@ -14,23 +15,101 @@ OBJECTS = ["environment", "memory trace", "chemical balance"]
 EVENTS = ["praise", "failure", "unexpected perception"]
 
 
+def _get_state_vector(chemicals_dict: dict, identity_dict: dict) -> list[float]:
+    # Extract keys and normalize: chemicals / 100.0, identity in [0, 1]
+    chems = ["dopamine", "cortisol", "oxytocin", "serotonin", "norepinephrine"]
+    traits = ["competence", "social_value", "resilience", "intelligence"]
+    
+    vec = []
+    for c in chems:
+        val = chemicals_dict.get(c, 50.0)
+        if isinstance(val, dict):
+            val = val.get("value", 50.0)
+        vec.append(float(val) / 100.0)
+        
+    for t in traits:
+        val = identity_dict.get(t, 0.5)
+        vec.append(float(val))
+    return vec
+
+
+def _cosine_similarity(v1: list[float], v2: list[float]) -> float:
+    dot = sum(a * b for a, b in zip(v1, v2))
+    norm_a = math.sqrt(sum(a * a for a in v1))
+    norm_b = math.sqrt(sum(b * b for b in v2))
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
 def generate_spontaneous(brain) -> None:
     dopamine = brain.chemicals.get("dopamine", {}).get("value", 0) / 100.0
-    if random.random() > (0.5 + 0.3 * dopamine):
+    # Higher dopamine increases spontaneous mind-wandering probability
+    if random.random() > (0.4 + 0.4 * dopamine):
         return
 
-    template = random.choice(CURIOSITY_TEMPLATES)
-    thought_text = template.format(
-        verb=random.choice(VERBS),
-        object=random.choice(OBJECTS),
-        event=random.choice(EVENTS),
-    )
+    # Build current state vector
+    curr_chems = {k: v["value"] for k, v in brain.chemicals.items()}
+    curr_id = brain.identity.get_snapshot() if hasattr(brain, "identity") else {}
+    curr_vec = _get_state_vector(curr_chems, curr_id)
 
-    th = Thought(
-        content=thought_text,
-        source="internal",
-        emotional_weight=0.1,
-        novelty=0.9,
-        relevance_to_goals=0.2,
-    )
-    GlobalWorkspace.post(th)
+    best_similarity = 0.0
+    best_event = None
+
+    # Scan autobiographical memory for associative cues (skip empty cycle steps)
+    if hasattr(brain, "autobiography") and brain.autobiography.events:
+        candidates = [
+            ev for ev in brain.autobiography.events
+            if ev.get("description") != "cycle_step" and "cycle_step" not in str(ev.get("description", ""))
+        ]
+        if candidates:
+            # Look at a selection of recent events
+            for ev in candidates[-60:]:
+                ev_chems = ev.get("chemicals", {})
+                ev_id = ev.get("identity", {})
+                ev_vec = _get_state_vector(ev_chems, ev_id)
+                sim = _cosine_similarity(curr_vec, ev_vec)
+                if sim > best_similarity:
+                    best_similarity = sim
+                    best_event = ev
+
+    # Replay memory if similarity exceeds cognitive threshold
+    if best_event and best_similarity >= 0.78:
+        desc = best_event.get("description", "a past experience")
+        # Strip prefixes for natural cognitive thought content
+        clean_desc = desc.replace("perceived_", "").replace("worldview_", "")
+        thought_text = f"I am recalling when I experienced: {clean_desc}"
+        
+        # Recalled thought inherits original event parameters scaled by similarity
+        orig_intensity = float((best_event.get("metadata", {}) or {}).get("intensity", 0.5))
+        emo_weight = min(1.0, orig_intensity * best_similarity)
+        
+        th = Thought(
+            content=thought_text,
+            source="memory",
+            emotional_weight=emo_weight,
+            novelty=0.3,
+            relevance_to_goals=0.4,
+            metadata={
+                "associative_replay": True,
+                "similarity_score": round(best_similarity, 4),
+                "original_event": best_event,
+            }
+        )
+    else:
+        # Fallback to standard curiosity template
+        template = random.choice(CURIOSITY_TEMPLATES)
+        thought_text = template.format(
+            verb=random.choice(VERBS),
+            object=random.choice(OBJECTS),
+            event=random.choice(EVENTS),
+        )
+        th = Thought(
+            content=thought_text,
+            source="internal",
+            emotional_weight=0.1,
+            novelty=0.9,
+            relevance_to_goals=0.2,
+        )
+
+    (getattr(brain, "global_workspace", None) or GlobalWorkspace).post(th)

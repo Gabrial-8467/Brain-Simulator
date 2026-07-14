@@ -68,7 +68,7 @@ class SelfReflection:
             novelty=0.3,
             relevance_to_goals=0.3,
         )
-        GlobalWorkspace.post(th)
+        (getattr(brain, "global_workspace", None) or GlobalWorkspace).post(th)
 
     def get_wisdom(self):
         return self.wisdom

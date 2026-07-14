@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from core.attention import Thought
 
 from .probability_model import ProbabilityModel
@@ -12,7 +13,28 @@ class DecisionEngine:
         self.action_feedback = decision_config.get("action_feedback", {})
         self.feedback_mode = decision_config.get("feedback_mode", "immediate")
 
-    def decide(self, focus: Thought, state: dict | None = None, recent_valence_avg: float = 0.0) -> dict:
+        # Initialize Q-table for Striatal Dopaminergic Reinforcement Learning
+        self.q_table = {}
+        actions = decision_config.get("actions", ["support", "challenge", "suggest", "refuse", "neutral"])
+        base_probs = decision_config.get("base_probabilities", {act: 0.2 for act in actions})
+        for tone in ["distressed", "tense", "calm", "confident", "hopeful", "neutral"]:
+            self.q_table[tone] = {act: float(base_probs.get(act, 0.2)) for act in actions}
+
+    def update_q_value(self, state_tone: str, action: str, reward: float) -> float:
+        state_tone = str(state_tone).lower()
+        if state_tone not in self.q_table:
+            actions = getattr(self.model, "actions", ["support", "challenge", "suggest", "refuse", "neutral"])
+            base_probs = getattr(self.model, "base_probabilities", {act: 0.2 for act in actions})
+            self.q_table[state_tone] = {act: float(base_probs.get(act, 0.2)) for act in actions}
+
+        current_q = self.q_table[state_tone].get(action, 0.0)
+        # Reward Prediction Error (RPE)
+        rpe = reward - current_q
+        # Q-learning update rule with striatal learning rate of 0.1
+        self.q_table[state_tone][action] = current_q + 0.1 * rpe
+        return rpe
+
+    def decide(self, focus: Thought, state: dict | None = None, recent_valence_avg: float = 0.0, bias_engine: Any = None) -> dict:
         state = state or {}
 
         neuro = state.get("neurochemicals", {}) if isinstance(state.get("neurochemicals", {}), dict) else {}
@@ -21,10 +43,24 @@ class DecisionEngine:
             "cortisol": float(neuro.get("cortisol", state.get("cortisol", 0.0))),
             "oxytocin": float(neuro.get("oxytocin", state.get("oxytocin", 0.0))),
             "serotonin": float(neuro.get("serotonin", state.get("serotonin", 0.0))),
+            "norepinephrine": float(neuro.get("norepinephrine", state.get("norepinephrine", 50.0))),
         }
         identity = state.get("identity_traits", {}) if isinstance(state.get("identity_traits", {}), dict) else {}
 
         base = self.model.compute(chemical_state)
+
+        # Apply Q-values from Striatal RL loop
+        mood_state = state.get("mood_state", {})
+        mood_tone = str(mood_state.get("tone", "neutral")).lower()
+        if mood_tone not in self.q_table:
+            self.q_table[mood_tone] = {act: float(self.model.base_probabilities.get(act, 0.2)) for act in self.model.actions}
+
+        ne_val = chemical_state.get("norepinephrine", 50.0) / 100.0
+        q_influence = max(0.1, 1.2 - ne_val)
+
+        for action in base:
+            base[action] += self.q_table[mood_tone].get(action, 0.0) * q_influence
+
         action_bias = state.get("decision_action_bias", {})
         if isinstance(action_bias, dict):
             for action, delta in action_bias.items():
@@ -126,6 +162,9 @@ class DecisionEngine:
         if unsafe_conf > 0.45:
             base["neutral"] = base.get("neutral", 0.0) + (0.18 * unsafe_conf)
             base["refuse"] = base.get("refuse", 0.0) + (0.12 * unsafe_conf)
+
+        if bias_engine:
+            base = bias_engine.modify_decision(base)
 
         for action in list(base.keys()):
             base[action] = max(self.model.min_prob, min(self.model.max_prob, base[action]))

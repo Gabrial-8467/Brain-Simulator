@@ -1,3 +1,5 @@
+from typing import Any
+
 class Chemical:
     def __init__(self, name: str, config: dict):
         self.name = name
@@ -38,3 +40,44 @@ class Chemical:
             "decay": self.decay,
             "noise": self.noise,
         }
+
+    def __getitem__(self, key: str) -> float | str:
+        if key == "value":
+            return self.value
+        elif key == "baseline":
+            return self.baseline
+        elif key == "min":
+            return self.min
+        elif key == "max":
+            return self.max
+        elif key == "decay":
+            return self.decay
+        elif key == "noise":
+            return self.noise
+        elif key == "name":
+            return self.name
+        raise KeyError(key)
+
+    def __setitem__(self, key: str, value: float | str) -> None:
+        if key == "value":
+            self.value = float(value)
+        elif key == "baseline":
+            self.baseline = float(value)
+        elif key == "min":
+            self.min = float(value)
+        elif key == "max":
+            self.max = float(value)
+        elif key == "decay":
+            self.decay = float(value)
+        elif key == "noise":
+            self.noise = float(value)
+        elif key == "name":
+            self.name = str(value)
+        else:
+            raise KeyError(key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
