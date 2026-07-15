@@ -3,12 +3,43 @@ from typing import Any
 class Chemical:
     def __init__(self, name: str, config: dict):
         self.name = name
-        self.value = config["baseline"]
-        self.baseline = config["baseline"]
-        self.min = config["min"]
-        self.max = config["max"]
-        self.decay = config["decay"]
-        self.noise = config["noise"]
+        self.value = float(config["baseline"])
+        self.baseline = float(config["baseline"])
+        self.min = float(config["min"])
+        self.max = float(config["max"])
+        self.decay = float(config["decay"])
+        self.noise = float(config["noise"])
+        
+        # Dynamic Receptor Sensitivity Configuration
+        self.sensitivity = 1.0
+        self.baseline_sensitivity = 1.0
+        self.chronic_high_ticks = 0
+        self.chronic_low_ticks = 0
+
+    @property
+    def effective_value(self) -> float:
+        return self.value * self.sensitivity
+
+    def update_receptor_dynamics(self):
+        # Downregulation if chronically elevated
+        if self.value >= 1.5 * self.baseline:
+            self.chronic_high_ticks += 1
+            if self.chronic_high_ticks >= 5:
+                self.sensitivity = max(0.2, self.sensitivity - 0.02)
+        else:
+            self.chronic_high_ticks = 0
+
+        # Upregulation if chronically depressed
+        if self.value <= 0.5 * self.baseline:
+            self.chronic_low_ticks += 1
+            if self.chronic_low_ticks >= 5:
+                self.sensitivity = min(2.0, self.sensitivity + 0.01)
+        else:
+            self.chronic_low_ticks = 0
+
+        # Gentle drift back to baseline sensitivity if chemical is near baseline
+        if 0.8 * self.baseline <= self.value <= 1.2 * self.baseline:
+            self.sensitivity += (self.baseline_sensitivity - self.sensitivity) * 0.005
 
     def apply_homeostasis(self):
         self.value += (self.baseline - self.value) * self.decay
@@ -39,6 +70,8 @@ class Chemical:
             "max": self.max,
             "decay": self.decay,
             "noise": self.noise,
+            "sensitivity": self.sensitivity,
+            "effective_value": self.effective_value,
         }
 
     def __getitem__(self, key: str) -> float | str:
@@ -56,6 +89,10 @@ class Chemical:
             return self.noise
         elif key == "name":
             return self.name
+        elif key == "sensitivity":
+            return self.sensitivity
+        elif key == "effective_value":
+            return self.effective_value
         raise KeyError(key)
 
     def __setitem__(self, key: str, value: float | str) -> None:
@@ -73,6 +110,8 @@ class Chemical:
             self.noise = float(value)
         elif key == "name":
             self.name = str(value)
+        elif key == "sensitivity":
+            self.sensitivity = float(value)
         else:
             raise KeyError(key)
 

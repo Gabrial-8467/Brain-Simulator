@@ -57,6 +57,10 @@ class ChemicalRegistry:
         for chem in self.chemicals.values():
             chem.clamp()
 
+    def update_receptor_dynamics(self):
+        for chem in self.chemicals.values():
+            chem.update_receptor_dynamics()
+
     def inject_event(self, effects: dict):
         for name, delta in effects.items():
             if name in self.chemicals:

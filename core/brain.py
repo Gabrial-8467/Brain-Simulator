@@ -21,6 +21,11 @@ from development.attachment_system import AttachmentSystem
 from development.curiosity_engine import CuriosityEngine
 from development.goal_system import GoalSystem
 
+from utils.text_processor import TextProcessor
+from utils.speech_regulator import SpeechRegulator
+from core.sensory_parser import SensoryParser
+from core.sleep_manager import SleepManager
+
 DEFAULT_BIAS_CONFIGS = {
     "negativity_bias": {
         "core_range": 0.1,
@@ -228,65 +233,15 @@ class VirtualBrain:
         self.recent_perceptions = deque(maxlen=50)
         self.scene_memory = deque(maxlen=25)
         self.novelty_memory = deque(maxlen=50)
-        self._scene_counts: dict[str, int] = {}
+        self.text_processor = TextProcessor()
+        self.speech_regulator = SpeechRegulator()
+        self.sensory_parser = SensoryParser(self.text_processor)
+        self.sleep_manager = SleepManager(cycle_period=100)
+
+        self._scene_counts = self.sensory_parser.scene_counts
+        self.stopwords = self.text_processor.stopwords
+        self.concept_aliases = self.text_processor.concept_aliases
         self.concept_memory = {}
-        self.stopwords = {
-            "i", "me", "my", "mine", "myself", "am", "being",
-            "a", "an", "the", "is", "are", "was", "were",
-            "for", "to", "and", "it", "that", "of", "in",
-            "nothing", "something", "with", "be", "have",
-            "has", "had", "do", "did", "at", "by", "from",
-            "on", "or", "but", "not", "no", "so", "if", "as",
-            "you", "your",
-            "this", "its", "near", "under",
-            "object", "objects", "attribute", "attributes", "relation", "relations",
-            "motion", "confidence",
-            "speaker", "text", "keyword", "keywords", "sentiment", "prosody",
-            "objects", "relations",
-        }
-        self.concept_aliases = {
-            "finger": "fingers",
-            "fingers": "fingers",
-            "hand": "hand",
-            "cat": "cat",
-            "cats": "cat",
-            "dog": "dog",
-            "dogs": "dog",
-            "face": "face",
-            "eyes": "eyes",
-            "eye": "eyes",
-            "camera": "camera",
-            "light": "light",
-            "dark": "darkness",
-            "bright": "brightness",
-            "person": "person",
-            "people": "person",
-            "man": "person",
-            "woman": "person",
-            "child": "person",
-            "kitten": "cat",
-            "puppy": "dog",
-            "room": "room",
-            "table": "table",
-            "chair": "chair",
-            "screen": "screen",
-            "monitor": "screen",
-            "phone": "phone",
-            "bottle": "bottle",
-            "book": "book",
-            "window": "window",
-            "door": "door",
-            "left": "left",
-            "right": "right",
-            "near": "near",
-            "behind": "behind",
-            "front": "front",
-            "red": "red",
-            "blue": "blue",
-            "green": "green",
-            "small": "small",
-            "large": "large",
-        }
         self.development_stage = "child"
         self.stage_learning_multipliers = {
             "child": 1.0,
@@ -307,75 +262,20 @@ class VirtualBrain:
         self._last_maturity = self.development.maturity
 
     def _run_sleep_cycle(self) -> dict[str, Any]:
-        self.sleep_ticks_left -= 1
-        self.fatigue = max(0.0, self.fatigue - 0.25)
-        if "cortisol" in self.chemicals:
-            self.chemicals["cortisol"]["value"] = max(self._original_baselines["cortisol"], self.chemicals["cortisol"]["value"] - 8.0)
-        if "serotonin" in self.chemicals:
-            self.chemicals["serotonin"]["value"] = min(self.chemicals["serotonin"]["max"], self.chemicals["serotonin"]["value"] + 5.0)
-        if "norepinephrine" in self.chemicals:
-            self.chemicals["norepinephrine"]["value"] = max(self._original_baselines["norepinephrine"], self.chemicals["norepinephrine"]["value"] - 10.0)
-        if "melatonin" in self.chemicals:
-            self.chemicals["melatonin"]["value"] = max(self._original_baselines["melatonin"], self.chemicals["melatonin"]["value"] - 25.0)
-        self._clamp()
-
-        if self.sleep_ticks_left >= 2:
-            if hasattr(self, "autobiography") and self.autobiography.events:
-                candidates = [ev for ev in self.autobiography.events if ev.get("description") != "cycle_step"]
-                if candidates:
-                    significant = candidates[-15:]
-                    for ev in significant:
-                        meta = ev.get("metadata", {}) or {}
-                        action = meta.get("action") or "neutral"
-                        regret = float(meta.get("regret", 0.0))
-                        reward = 1.0 - (regret * 2.0)
-                        mood_tone = "neutral"
-                        if self.decision_engine and hasattr(self.decision_engine, "update_q_value"):
-                            self.decision_engine.update_q_value(mood_tone, action, reward)
-            if self.decision_engine and hasattr(self.decision_engine, "q_table"):
-                for tone in self.decision_engine.q_table:
-                    for act in self.decision_engine.q_table[tone]:
-                        self.decision_engine.q_table[tone][act] *= 0.98
-        else:
-            self.worldview.update_beliefs(self)
-            dream_text = "I am dreaming of floating through memory pathways..."
-            if hasattr(self, "autobiography") and self.autobiography.events:
-                candidates = [ev for ev in self.autobiography.events if ev.get("description") != "cycle_step"]
-                if candidates:
-                    ev = random.choice(candidates)
-                    dream_text = f"Dreaming of: {ev.get('description', 'memories')}"
-            dream_thought = Thought(
-                content=dream_text,
-                source="dream",
-                emotional_weight=0.5,
-                novelty=0.7,
-                relevance_to_goals=0.3
-            )
-            self.global_workspace.post(dream_thought)
-
-        if self.sleep_ticks_left <= 0:
-            self.sleeping = False
-
-        self.step_counter += 1
-        return {"action": "sleep", "probabilities": {"neutral": 1.0}, "feedback": {}, "asleep": True}
+        return self.sleep_manager.run_sleep_cycle(self)
 
     def tick(self):
         if self.sleeping:
             return self._run_sleep_cycle()
 
-        # 1. Accumulate Melatonin
-        if "melatonin" in self.chemicals:
-            self.chemicals["melatonin"]["value"] = min(100.0, self.chemicals["melatonin"]["value"] + self.fatigue * 2.0)
-            self._clamp()
+        # 1. Update sleep drives and Process S/Process C dynamics
+        self.sleep_manager.update_sleep_drives(self)
 
-        # 2. Check sleep triggers (fatigue threshold or Melatonin clock > 80.0)
-        has_melatonin_trigger = "melatonin" in self.chemicals and self.chemicals["melatonin"]["value"] > 80.0
-        if self.fatigue > 0.85 or has_melatonin_trigger:
+        # 2. Check sleep triggers
+        if self.sleep_manager.should_sleep(self):
             self.sleeping = True
             self.sleep_ticks_left = 5
             return self._run_sleep_cycle()
-
-        self.fatigue = min(1.0, self.fatigue + 0.02)
 
         # 3. Dynamic Acetylcholine (ACh) attention focus tracking
         if "acetylcholine" in self.chemicals:
@@ -413,6 +313,8 @@ class VirtualBrain:
             ne_val += cort_delta * 0.25
             self.chemicals["norepinephrine"]["value"] = max(0.0, min(100.0, ne_val))
             self._clamp()
+
+        self.chemicals.update_receptor_dynamics()
 
         serotonin = self.chemicals.get("serotonin", {}).get("value", 0.0)
         cortisol = self.chemicals.get("cortisol", {}).get("value", 0.0)
@@ -519,7 +421,13 @@ class VirtualBrain:
                 recent_valence_avg=recent_valence_avg,
                 bias_engine=self.bias_engine,
             )
-            self._decision_debug["decision_path"] = "model"
+            if decision_output and "probabilities" in decision_output:
+                best_action = self.strategic_planner.choose_action(self, decision_output["probabilities"])
+                decision_output["action"] = best_action
+                decision_output["feedback"] = self.decision_engine.action_feedback.get(best_action, {})
+                self._decision_debug["decision_path"] = "strategic_planner"
+            else:
+                self._decision_debug["decision_path"] = "model"
 
         if (
             decision_output is None
@@ -1432,219 +1340,17 @@ class VirtualBrain:
         )
 
     def receive_visual_signal(self, signal: Any) -> None:
-        """
-        Receive a structured visual signal and route it into the same
-        perception-understanding pipeline used by other modalities.
-        """
-        def _read(name: str, default: Any):
-            if hasattr(signal, name):
-                return getattr(signal, name)
-            if isinstance(signal, dict):
-                return signal.get(name, default)
-            return default
-
-        objects = [str(x).strip().lower() for x in (_read("objects", []) or []) if str(x).strip()]
-        attributes = _read("attributes", {}) or {}
-        relations = _read("relations", []) or []
-        motion_level = float(_read("motion_level", 0.0))
-        confidence = float(_read("confidence", 0.7))
-        source = str(_read("source", "vision_sensor"))
-
-        if not objects and not attributes and not relations:
-            return
-
-        motion_level = max(0.0, min(1.0, motion_level))
-        confidence = max(0.0, min(1.0, confidence))
-
-        parts = []
-        if objects:
-            parts.append("objects: " + ", ".join(objects))
-
-        attr_descriptions = []
-        for obj, attrs in attributes.items():
-            norm_obj = self._normalize_token(str(obj))
-            norm_attrs = [self._normalize_token(str(a)) for a in (attrs or []) if self._normalize_token(str(a))]
-            if norm_obj and norm_attrs:
-                attr_descriptions.append(f"{norm_obj} is " + "/".join(norm_attrs))
-        if attr_descriptions:
-            parts.append("attributes: " + "; ".join(attr_descriptions))
-
-        normalized_relations = []
-        for rel in relations:
-            left = self._normalize_token(str(rel.get("from", "")))
-            edge = self._normalize_token(str(rel.get("rel", "")))
-            right = self._normalize_token(str(rel.get("to", "")))
-            if left and edge and right:
-                if edge == "threat" and left == right:
-                    continue
-                normalized_relations.append({"from": left, "rel": edge, "to": right})
-
-        relation_labels = {str(rel.get("rel", "")).lower() for rel in normalized_relations}
-        category = "environment_scan"
-        valence = 0.1
-        intensity = 0.28 + (motion_level * 0.18)
-        if "threat" in relation_labels or motion_level > 0.9:
-            category = "threat_detected"
-            valence = -0.8
-            intensity = max(0.8, 0.65 + motion_level * 0.2)
-        elif "face" in objects and confidence >= 0.75:
-            category = "face_recognized"
-            valence = 0.5
-            intensity = 0.42 + (motion_level * 0.2)
-        elif "face" in objects:
-            category = "face_unknown"
-            valence = 0.2
-            intensity = 0.5 + (motion_level * 0.18)
-
-        if category == "threat_detected":
-            relations_for_scene = [r for r in normalized_relations if r.get("rel") != "threat"]
-            unique_objects = []
-            for obj in objects:
-                if obj not in unique_objects:
-                    unique_objects.append(obj)
-            if len(unique_objects) >= 2:
-                relations_for_scene.append(
-                    {
-                        "from": unique_objects[0],
-                        "rel": "threat",
-                        "to": unique_objects[1],
-                    }
-                )
-        else:
-            relations_for_scene = [r for r in normalized_relations if r.get("rel") != "threat"]
-
-        rel_descriptions = []
-        for rel in relations_for_scene:
-            left = self._normalize_token(str(rel.get("from", "")))
-            edge = self._normalize_token(str(rel.get("rel", "")))
-            right = self._normalize_token(str(rel.get("to", "")))
-            if left and edge and right:
-                rel_descriptions.append(f"{left} {edge} {right}")
-        if rel_descriptions:
-            parts.append("relations: " + "; ".join(rel_descriptions))
-
-        parts.append(f"motion={motion_level:.2f}")
-        parts.append(f"confidence={confidence:.2f}")
-        scene_text = " | ".join(parts)
-
-        self.perceive(
-            {
-                "modality": "vision",
-                "content": scene_text,
-                "category": category,
-                "source": source,
-                "valence": valence,
-                "intensity": max(0.2, min(0.95, intensity)),
-                "timestamp": time.time(),
-                "scene": {
-                    "objects": objects,
-                    "attributes": attributes,
-                    "relations": relations_for_scene,
-                    "confidence": confidence,
-                },
-            }
-        )
+        parsed = self.sensory_parser.parse_visual_signal(signal)
+        if parsed:
+            self.perceive(parsed)
 
     def receive_hearing_signal(self, signal: Any) -> None:
-        """
-        Receive a structured hearing signal and route it into the auditory
-        perception-understanding pipeline.
-        """
-        def _read(name: str, default: Any):
-            if hasattr(signal, name):
-                return getattr(signal, name)
-            if isinstance(signal, dict):
-                return signal.get(name, default)
-            return default
-
-        transcript = str(_read("transcript", "")).strip()
-        speaker_type = str(_read("speaker_type", "unknown")).strip().lower()
-        sentiment = float(_read("sentiment", 0.0))
-        prosody_intensity = float(_read("prosody_intensity", 0.5))
-        keywords = [str(k).strip().lower() for k in (_read("keywords", []) or []) if str(k).strip()]
-        source = str(_read("source", "audio_sensor"))
-
-        if not transcript:
-            return
-
-        sentiment = max(-1.0, min(1.0, sentiment))
-        prosody_intensity = max(0.0, min(1.0, prosody_intensity))
-
-        text_lower = transcript.lower()
-        if "why did you do that" in text_lower and "accountability" not in keywords:
-            keywords.append("accountability")
-        category = "speech_detected"
-        valence = 0.2
-        intensity = 0.3 + (prosody_intensity * 0.25)
-        if not transcript.strip() or "silence" in keywords:
-            category = "boredom"
-            valence = -0.2
-            intensity = 0.22
-        elif "loud_noise" in keywords or "bang" in text_lower or "alarm" in text_lower:
-            category = "loud_noise"
-            valence = -0.4
-            intensity = max(0.75, prosody_intensity)
-        elif speaker_type in {"caregiver", "teacher", "peer"}:
-            category = "voice_recognized"
-            valence = self._voice_valence_from_keywords(keywords)
-            intensity = 0.35 + (prosody_intensity * 0.25)
-
-        salience = 0.4 if {"accountability", "confrontation"} & set(keywords) else abs(valence)
-
-        hearing_text = (
-            f"speaker={speaker_type} | text={transcript if transcript else 'silence'} | "
-            f"sentiment={sentiment:.2f} | prosody={prosody_intensity:.2f} | "
-            f"keywords={','.join(keywords)}"
-        )
-
-        self.perceive(
-            {
-                "modality": "hearing",
-                "content": hearing_text,
-                "category": category,
-                "source": source,
-                "valence": valence,
-                "intensity": max(0.2, min(0.95, intensity)),
-                "timestamp": time.time(),
-                "scene": {
-                    "speaker_type": speaker_type,
-                    "keywords": keywords,
-                    "prosody_intensity": prosody_intensity,
-                    "sentiment": sentiment,
-                    "salience": salience,
-                },
-            }
-        )
-
-    def _voice_valence_from_keywords(self, keywords: list[str] | set[str]) -> float:
-        keyword_set = {str(k).strip().lower() for k in (keywords or []) if str(k).strip()}
-        if "accountability" in keyword_set or "confrontation" in keyword_set:
-            return -0.2
-        if "criticism" in keyword_set:
-            return -0.5
-        if "lonely" in keyword_set or "ignored" in keyword_set:
-            return -0.4
-        if "question" in keyword_set:
-            return 0.0
-        if {"praise", "support", "effort"} & keyword_set:
-            return 0.5
-        if "collaboration" in keyword_set:
-            return 0.3
-        if {"social", "greeted"} & keyword_set:
-            return 0.4
-        return 0.1
+        parsed = self.sensory_parser.parse_hearing_signal(signal)
+        if parsed:
+            self.perceive(parsed)
 
     def _normalize_token(self, token: str) -> str:
-        base = token.lower().strip()
-        if base in self.stopwords:
-            return ""
-        if base in self.concept_aliases:
-            return self.concept_aliases[base]
-        if base.endswith("es") and len(base) > 4:
-            base = base[:-2]
-        elif base.endswith("s") and len(base) > 3:
-            base = base[:-1]
-        return self.concept_aliases.get(base, base)
+        return self.text_processor.normalize_token(token)
 
     def _analyze_perception(
         self,
@@ -1653,97 +1359,10 @@ class VirtualBrain:
         valence: float = 0.0,
         provided_scene: dict | None = None,
     ) -> dict:
-        text = (content or "").lower()
-        tokens = [self._normalize_token(t) for t in re.findall(r"[a-zA-Z]+", text)]
-        provided_scene = provided_scene or {}
-
-        entity_vocab = {
-            "person", "cat", "dog", "hand", "fingers", "face", "eyes",
-            "camera", "room", "table", "chair", "screen", "phone",
-            "bottle", "book", "window", "door",
-        }
-        attribute_vocab = {
-            "bright", "brightness", "dark", "darkness", "red", "blue", "green",
-            "small", "large", "near", "behind", "front", "left", "right",
-        }
-        relation_markers = {"near", "behind", "front", "left", "right", "with", "on", "under"}
-
-        entities = [t for t in tokens if t in entity_vocab]
-        attributes = [t for t in tokens if t in attribute_vocab]
-        entities.extend([self._normalize_token(x) for x in provided_scene.get("objects", []) if self._normalize_token(x)])
-        for attrs in provided_scene.get("attributes", {}).values():
-            attributes.extend([self._normalize_token(a) for a in attrs if self._normalize_token(a)])
-
-        relations = []
-        for i, tok in enumerate(tokens):
-            if tok in relation_markers and i > 0 and i < len(tokens) - 1:
-                left = tokens[i - 1]
-                right = tokens[i + 1]
-                if left in entity_vocab and right in entity_vocab:
-                    relations.append({"from": left, "rel": tok, "to": right})
-        for rel in provided_scene.get("relations", []):
-            left = self._normalize_token(str(rel.get("from", "")))
-            edge = self._normalize_token(str(rel.get("rel", "")))
-            right = self._normalize_token(str(rel.get("to", "")))
-            if left and edge and right:
-                relations.append({"from": left, "rel": edge, "to": right})
-
-        fingerprint = f"{modality}:{' '.join([t for t in tokens if t])}".strip()
-        seen_count = self._scene_counts.get(fingerprint, 0)
-        novelty = 0.8 if seen_count == 0 else max(0.02, 0.8 / (seen_count + 1))
-        self._scene_counts[fingerprint] = seen_count + 1
-
-        salience_structural = min(
-            1.0,
-            (len(set(entities)) * 0.2) + (len(relations) * 0.15) + (len(set(attributes)) * 0.1),
-        )
-        salience = max(abs(valence), salience_structural, float(provided_scene.get("salience", 0.0)))
-        task_relevance = min(1.0, (0.3 if "person" in entities else 0.0) + (0.2 if "camera" in entities else 0.0))
-        confidence = min(
-            1.0,
-            max(
-                float(provided_scene.get("confidence", 0.0)),
-                0.4 + 0.1 * len(set(entities)) + 0.1 * len(relations),
-            ),
-        )
-
-        summary_parts = []
-        if entities:
-            summary_parts.append("entities=" + ",".join(sorted(set(entities))[:4]))
-        if attributes:
-            summary_parts.append("attributes=" + ",".join(sorted(set(attributes))[:4]))
-        if relations:
-            r = relations[0]
-            summary_parts.append(f"relation={r['from']} {r['rel']} {r['to']}")
-        summary = "; ".join(summary_parts) if summary_parts else content[:120]
-
-        return {
-            "modality": modality,
-            "tokens": tokens,
-            "entities": sorted(set(entities)),
-            "attributes": sorted(set(attributes)),
-            "relations": relations,
-            "novelty": float(provided_scene.get("novelty", novelty)),
-            "salience": salience,
-            "task_relevance": task_relevance,
-            "confidence": confidence,
-            "summary": summary,
-        }
+        return self.sensory_parser.analyze_perception(modality, content, valence, provided_scene)
 
     def _extract_concepts(self, text, modality: str = "experience"):
-        tokens = re.findall(r"[a-zA-Z]+", (text or "").lower())
-        concepts = []
-        for tok in tokens:
-            if len(tok) < 3:
-                continue
-            if tok == "you":
-                if modality in {"hearing", "vision"}:
-                    concepts.append("you")
-                continue
-            mapped = self._normalize_token(tok)
-            if mapped and len(mapped) >= 3 and mapped not in self.stopwords:
-                concepts.append(mapped)
-        return concepts
+        return self.text_processor.extract_concepts(text, modality)
 
     def _learn_from_perception(self, modality, content, source, scene=None, category=""):
         scene = scene or {}
@@ -1847,44 +1466,14 @@ class VirtualBrain:
         ]
 
     def regulate_speech(self, text: str):
-        if not text:
-            return text
-
-        controlled = text.strip()
         state = self.get_state()
-        fatigue = state.get("fatigue", 0.0)
-        cortisol = state.get("cortisol", 50.0)
-        oxytocin = state.get("oxytocin", 50.0)
-        stage = state.get("development_stage", "child")
-
-        if fatigue > 0.7 or cortisol > 70:
-            parts = controlled.split(".")
-            controlled = parts[0].strip()
-            if not controlled.endswith((".", "!", "?")):
-                controlled += "."
-
-        if stage == "child":
-            words = controlled.split()
-            controlled = " ".join(words[:28]).strip()
-            if controlled and not controlled.endswith((".", "!", "?")):
-                controlled += "."
-
-        trailing_bad = {"and", "or", "but", "so", "because"}
-        tokens = controlled.rstrip(".!? ").split()
-        if tokens and tokens[-1].lower() in trailing_bad:
-            tokens = tokens[:-1]
-            if tokens:
-                controlled = " ".join(tokens).strip()
-                if not controlled.endswith((".", "!", "?")):
-                    controlled += "."
-
-        if oxytocin > 70 and not any(
-            controlled.lower().startswith(prefix)
-            for prefix in ("i ", "we ", "let", "you're", "you are")
-        ):
-            controlled = "I hear you. " + controlled
-
-        return controlled
+        return self.speech_regulator.regulate(
+            text=text,
+            fatigue=self.fatigue,
+            cortisol=state.get("cortisol", 50.0),
+            oxytocin=state.get("oxytocin", 50.0),
+            stage=self.development_stage
+        )
 
     def _adapt_risk(self, regret):
         if regret > 0:
@@ -2117,6 +1706,8 @@ class VirtualBrain:
 
     def get_state(self):
         chemical_values = {name: data["value"] for name, data in self.chemicals.items()}
+        effective_chemical_values = {name: data.effective_value for name, data in self.chemicals.items()}
+        receptor_sensitivities = {name: data.sensitivity for name, data in self.chemicals.items()}
         identity_snapshot = self.identity.get_snapshot()
         development_snapshot = self.development.get_snapshot()
         narrative = self.narrative_engine.get_current_narrative()
@@ -2149,6 +1740,8 @@ class VirtualBrain:
             {
                 # Full nested payload for persistence
                 "neurochemicals": chemical_values,
+                "effective_neurochemicals": effective_chemical_values,
+                "receptor_sensitivities": receptor_sensitivities,
                 "identity_traits": identity_snapshot,
                 "development_stage": self.development_stage,
                 "experience_points": self.development.experience_points,
@@ -2199,6 +1792,12 @@ class VirtualBrain:
         for chem, value in neurochemicals.items():
             if chem in self.chemicals and isinstance(value, (int, float)):
                 self.chemicals[chem]["value"] = float(value)
+
+        receptor_sensitivities = state_dict.get("receptor_sensitivities")
+        if isinstance(receptor_sensitivities, dict):
+            for chem, value in receptor_sensitivities.items():
+                if chem in self.chemicals and isinstance(value, (int, float)):
+                    self.chemicals[chem].sensitivity = float(value)
 
         identity_traits = state_dict.get("identity_traits")
         if not isinstance(identity_traits, dict):
@@ -2282,6 +1881,7 @@ class VirtualBrain:
         fatigue = state_dict.get("fatigue")
         if isinstance(fatigue, (int, float)):
             self.fatigue = max(0.0, min(1.0, float(fatigue)))
+            self.sleep_manager.process_s = self.fatigue
 
         step_counter = state_dict.get("step_counter")
         if isinstance(step_counter, (int, float)):

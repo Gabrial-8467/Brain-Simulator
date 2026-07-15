@@ -39,12 +39,13 @@ class DecisionEngine:
         state = state or {}
 
         neuro = state.get("neurochemicals", {}) if isinstance(state.get("neurochemicals", {}), dict) else {}
+        effective_neuro = state.get("effective_neurochemicals", {}) if isinstance(state.get("effective_neurochemicals", {}), dict) else {}
         chemical_state = {
-            "dopamine": float(neuro.get("dopamine", state.get("dopamine", 0.0))),
-            "cortisol": float(neuro.get("cortisol", state.get("cortisol", 0.0))),
-            "oxytocin": float(neuro.get("oxytocin", state.get("oxytocin", 0.0))),
-            "serotonin": float(neuro.get("serotonin", state.get("serotonin", 0.0))),
-            "norepinephrine": float(neuro.get("norepinephrine", state.get("norepinephrine", 50.0))),
+            "dopamine": float(effective_neuro.get("dopamine", neuro.get("dopamine", state.get("dopamine", 0.0)))),
+            "cortisol": float(effective_neuro.get("cortisol", neuro.get("cortisol", state.get("cortisol", 0.0)))),
+            "oxytocin": float(effective_neuro.get("oxytocin", neuro.get("oxytocin", state.get("oxytocin", 0.0)))),
+            "serotonin": float(effective_neuro.get("serotonin", neuro.get("serotonin", state.get("serotonin", 0.0)))),
+            "norepinephrine": float(effective_neuro.get("norepinephrine", neuro.get("norepinephrine", state.get("norepinephrine", 50.0)))),
         }
         identity = state.get("identity_traits", {}) if isinstance(state.get("identity_traits", {}), dict) else {}
 

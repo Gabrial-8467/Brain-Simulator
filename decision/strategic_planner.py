@@ -149,9 +149,15 @@ class StrategicPlanner:
         for chem, val in next_chemicals.items():
             temp_state[chem] = val  # update flattened values
 
-        # Next state probabilities
+        # Next state probabilities modulated by receptor sensitivities
         if brain.decision_engine and brain.decision_engine.model:
-            next_probabilities = brain.decision_engine.model.compute(next_chemicals)
+            effective_next = {}
+            for name, val in next_chemicals.items():
+                sens = 1.0
+                if name in brain.chemicals:
+                    sens = brain.chemicals[name].sensitivity
+                effective_next[name] = val * sens
+            next_probabilities = brain.decision_engine.model.compute(effective_next)
             action_bias = temp_state.get("decision_action_bias", {})
             if isinstance(action_bias, dict):
                 for act, delta in action_bias.items():

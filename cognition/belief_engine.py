@@ -125,24 +125,23 @@ class BeliefEngine:
 
         for event in window:
             f = self._extract_fields(event)
-            text = f["text"]
             cat = f["category"]
             if cat:
                 counts[cat] += 1
 
-            if "criticism" in text or "criticized" in text or "mistake" in text:
+            if cat == "criticism":
                 counts["criticism_like"] += 1
-            if "failure" in text or "failed" in text:
+            elif cat == "failure":
                 counts["failure_like"] += 1
-            if "success" in text or "solved" in text:
+            elif cat == "success":
                 counts["success_like"] += 1
-            if "ignored" in text or "isolated" in text or "loneliness" in text:
+            elif cat in {"ignored", "loneliness"}:
                 counts["social_rejection_like"] += 1
-            if "threat_detected" in text or "threat" in text or "danger" in text:
+            elif cat in {"threat_detected", "loud_noise"}:
                 counts["threat_like"] += 1
-            if "greeted" in text or "praise" in text or "proud of you" in text:
+            elif cat in {"greeted", "praise"}:
                 counts["support_like"] += 1
-            if "novelty" in text or "new and unfamiliar" in text:
+            elif cat in {"novelty", "face_unknown", "speech_detected"}:
                 counts["novelty_like"] += 1
 
         task_successes = counts["success"] + counts["success_like"]
@@ -345,14 +344,12 @@ class BeliefEngine:
 
         if self._belief_confidence("Criticism often follows my attempts.") > 0.5:
             conf = self._belief_confidence("Criticism often follows my attempts.")
-            if category in {"criticism", "ignored", "loneliness"} or "mistake" in text:
+            if category in {"criticism", "ignored", "loneliness", "failure"}:
                 intensity_scale += 0.16 * conf
                 valence_shift -= 0.05 * conf
 
         unsafe_conf = self._belief_confidence("environment often feels unsafe")
-        if unsafe_conf > 0.45 and (
-            category in {"threat_detected", "loud_noise"} or "threat" in text
-        ):
+        if unsafe_conf > 0.45 and category in {"threat_detected", "loud_noise"}:
             intensity_scale += 0.2 * unsafe_conf
             valence_shift -= 0.04 * unsafe_conf
 
