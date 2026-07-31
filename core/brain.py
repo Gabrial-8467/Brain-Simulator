@@ -274,7 +274,7 @@ class VirtualBrain:
         # 2. Check sleep triggers
         if self.sleep_manager.should_sleep(self):
             self.sleeping = True
-            self.sleep_ticks_left = 5
+            self.sleep_ticks_left = getattr(self.sleep_manager, "sleep_duration", 5)
             return self._run_sleep_cycle()
 
         # 3. Dynamic Acetylcholine (ACh) attention focus tracking
@@ -567,6 +567,14 @@ class VirtualBrain:
         source = str(_read("source", "simulated"))
         timestamp = float(_read("timestamp", 0.0))
         scene_input = _read("scene", {}) or {}
+
+        # Forced Sleep Command Check
+        if "go to sleep" in content.lower() or "go_to_sleep" in category:
+            self.sleeping = True
+            self.sleep_ticks_left = getattr(self.sleep_manager, "sleep_duration", 5)
+            if "melatonin" in self.chemicals:
+                self.chemicals["melatonin"]["value"] = 85.0
+                self._clamp()
 
         if not content:
             content = f"{modality} event"
@@ -1326,6 +1334,10 @@ class VirtualBrain:
             event_type = "praise"
             valence = 0.5
             intensity = 0.55
+        elif "go to sleep" in low_content:
+            event_type = "go_to_sleep"
+            valence = 0.0
+            intensity = 0.1
 
         self.perceive(
             {

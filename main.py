@@ -144,6 +144,9 @@ def run_live_debug(brain, memory_manager=None):
         if user_input.lower() == "exit":
             break
 
+        if user_input.strip():
+            brain.observe_perception("hearing", user_input)
+
         brain.tick()
 
         state = brain.get_state()

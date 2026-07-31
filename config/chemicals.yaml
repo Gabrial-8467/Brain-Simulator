@@ -86,3 +86,9 @@ interactions:
 global_settings:
   clamp_after_interaction: true
   clamp_after_noise: true
+
+sleep_settings:
+  cycle_period: 1440
+  sleep_duration: 480
+  fatigue_accumulation_rate: 0.001
+  fatigue_recovery_rate: 0.002
