@@ -1,67 +1,54 @@
 # Virtual Brain Engine - Practical Applications (Current Scope)
 
-This document lists realistic applications based on features that are currently implemented.
+This document lists realistic applications based on features that are currently implemented in the simulator.
 
 ## 1. Cognitive Architecture Prototyping
 
-- Test attention-based cognitive loops using `Thought` + Global Workspace.
-- Evaluate how memory, perception, and reflection interact over many cycles.
-- Experiment with consciousness scoring tied to focus stability and development state.
+- **Attention Gating & Workspace Competition**: Test attention-based cognitive loops using the `Thought` + `GlobalWorkspace` competitive selection mechanism.
+- **Salience Network Gating**: Study transition conditions between Task Positive Network (TPN) and Default Mode Network (DMN) modes modulated by Norepinephrine.
+- **Dream & Memory Replays**: Evaluate offline memory consolidation, Hopfield CA3 attractor recall, and sleep cycle recovery (SWS and REM).
 
 ## 2. Developmental Simulation Experiments
 
-- Run repeatable synthetic lifecycles with `SyntheticEnvironment`.
-- Measure effects of event patterns (`praise`, `criticism`, `failure`, `success`, etc.) on:
-  - chemical state
-  - identity traits
-  - development metrics
-  - narrative shifts
-- Compare deterministic vs stochastic runs.
+- **Stress-Slowed Growth**: Measure the impact of stress exposure and chemical volatility on maturity progression and stage transitions (Baby -> Child -> Teen -> Adult).
+- **Homeostatic Stability**: Test chemical homeostasis, receptor sensitivity scaling, and matrix interactions under various external event frequencies.
+- **Deterministic vs Stochastic Runs**: Compare deterministic runs (greedy selection, no noise) against stochastic runs for reproducibility research.
 
 ## 3. Perception-to-Memory Pipeline Testing
 
-- Feed event signals via `brain.perceive(...)`.
-- Feed text modality input via `brain.observe_perception(...)`.
-- Feed structured sensor-like inputs:
-  - `brain.receive_visual_signal(...)`
-  - `brain.receive_hearing_signal(...)`
-- Inspect concept growth and recent perception history in exported state.
+- **Perceptual Gating & Appraisal**: Study how the `BeliefEngine` schemas (criticism, failure, support, etc.) appraisal-modulate incoming perceptions.
+- **Curiosity-Driven GWT Gating**: Observe how the `CuriosityEngine` logs event frequencies to boost novelty weights in the Global Workspace.
+- **Multimodal Sensor Simulation**: Feed text, structured vision, and structured hearing signals, observing semantic concepts and scene parser updates.
 
-## 4. Reflection and Wisdom Dynamics
+## 4. Reinforcement Learning & Planning
 
-- Observe regret-based reflection using self-reflection module.
-- Track periodic reflection effects on:
-  - `development_reflection_depth`
-  - `wisdom`
-  - `consciousness_score`
-- Study how reflective updates influence long-run maturity and risk tolerance.
+- **Striatal RL Action Policies**: Analyze how the `DecisionEngine` maps active mood states to action Q-values, and updates them via Reward Prediction Errors (RPE).
+- **Look-Ahead Strategic Planning**: Test recursive tree search planning over lightweight state dictionaries to determine optimal prosocial or survival actions.
+- **Goal System Gating**: Track how Goal System values (Safety, Mastery, Social Connection) influence workspace selection relevance and action reinforcement.
 
-## 5. Narrative and Identity Studies
+## 5. Narrative, Identity, and Speech Studies
 
-- Analyze how autobiographical event accumulation updates narrative text.
-- Track identity trait drift (`competence`, `social_value`, `resilience`, `intelligence`) under different event schedules.
-- Examine coupling between stress exposure, recovery, and resilience changes.
+- **Evidence-Based Identity**: Trace trait values (`competence`, `social_value`, `resilience`, `intelligence`) as they accumulate evidence over developmental cycles.
+- **Self-Narrative Synthesis**: Study how the `NarrativeEngine` updates internal monologues and records milestones.
+- **Linguistic Speech Regulation**: Investigate how the `SpeechRegulator` truncates, limits, and prefixes responses based on cortisol levels, oxytocin levels, and maturity stages.
 
-## 6. Educational and Research Demos
+## 6. Metacognition & Self-Reflection
 
-- Demonstrate multi-cycle stateful cognition to students or research teams.
-- Use CLI simulation mode to show full state evolution per step.
-- Use live mode as an interactive debug surface for manual event/perception experiments.
+- **Regret-to-Wisdom Dynamics**: Track how counterfactual comparisons between chosen and best-alternative actions generate regret, reducing competence but increasing Wisdom.
+- **Reflective GWT Intrusion**: Study how high regret posts reflection thoughts back to the workspace to redirect attention to mistakes.
 
-## 7. Integration Baseline for External Sensors
+## 7. Educational and Research Demos
 
-- Use current structured interfaces as integration points for external pipelines:
-  - vision system -> `receive_visual_signal`
-  - hearing/audio system -> `receive_hearing_signal`
-- Keep external sensor logic separate from brain internals while reusing the same learning and memory path.
+- Demonstrate multi-cycle stateful, biologically inspired cognition to students or research teams.
+- Use the CLI simulation mode to inspect full state logs at each step or live mode for manual interactive debug scenarios.
 
 ## Non-goals in Current Repository
 
 The current project does not implement:
 
-- web API service layer
-- production persistence/database layer
-- camera CLI mode in `main.py`
-- LLM chatbot orchestration
+- Production-grade external database layer (it utilizes a local JSON storage file).
+- Multi-agent networked environment.
+- Live camera feed or audio capture CLI tools.
+- Direct LLM conversational wrapper.
 
 The codebase is best used as a research/development cognitive simulation core.
