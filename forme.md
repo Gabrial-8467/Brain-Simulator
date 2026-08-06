@@ -13,13 +13,14 @@ The following diagram illustrates how sensory signals, neurochemical homeostasis
 ```mermaid
 graph TD
     %% Sensory Inputs
-    subgraph Sensory Perception
-        V[Visual Signal] -->|Relations & Attributes| PE[Perception Parser]
-        H[Hearing Signal] -->|Keywords & Prosody| PE
-        E[Life Events] -->|Valence & Intensity| PE
+    subgraph Aashu Sensors (Client)
+        V[AashuEyes OpenCV] -->|/perceive/visual| PE[Perception Parser]
+        H[AashuEars Mic] -->|/perceive/hearing| PE
+        HW[HardwareMonitor CPU/Bat] -->|/perceive raw| PE
+        SC[AashuScheduler] -->|/tick heartbeat| GW
     end
 
-    %% Core Processing
+    %% Core Processing (Virtual Brain Server)
     subgraph Neurochemical Homeostasis
         PE -->|Trigger Signal| CD[Chemical Dynamics]
         CD -->|1. Matrix Interactions| I[Interactions]
@@ -49,14 +50,19 @@ graph TD
         FT -->|Attention Gate| DE[Decision Engine]
         DE -->|Mood & Belief Modulation| P[Action Probabilities]
         P -->|Deep Copy State| SP[Strategic Planner]
-        SP -->|Multi-Step Lookahead| SE[Action Execution]
+        SP -->|Tool Matching| TC[ToolConnector]
     end
 
-    %% Feedback & Reflection
+    %% Aashu Command Execution
+    subgraph Aashu Actuators (Client)
+        TC -->|API Response: tool_call| AX[AashuActuators]
+        AX -->|execute_tool| OUT[Physical Action / OS cmd]
+        OUT -->|/perceive raw: tool_result| PE
+    end
+
+    %% Feedback & Reflection (Server)
     subgraph Reflection & Adaptation
-        SE -->|Reward/Penalty| DF[Decision Feedback]
-        DF -->|Modify Chemicals| CD
-        SE -->|Chosen Action| REF[Self-Reflection]
+        TC -->|Strategic Chosen Action| REF[Self-Reflection]
         REF -->|Regret Calculation| CO[Competence & Wisdom Updates]
         REF -->|Propose Reflection Thought| GW
     end
@@ -234,6 +240,14 @@ Prepare for technical interviews with these highly specific questions and answer
 > 1. **`AttachmentSystem`**: Updates on perception events from specific sources, buffering cortisol spikes, boosting oxytocin responses, and modifying decision probabilities for prosocial behavior.
 > 2. **`CuriosityEngine`**: Logs concept frequency to dynamically calculate curiosity values, overriding static novelty weights in workspace competition and triggering dopaminergic rewards upon selection.
 > 3. **`GoalSystem`**: Tracks active goals (Safety, Mastery, Social Connection) based on action outcomes and counterfactual regrets, shifting workspace thought relevance and lookahead planner utilities dynamically.
+
+### Q7: "How do Aashu (the client assistant agent) and the Virtual Brain simulator align, and what is the exact command-execution protocol?"
+> **Answer:**
+> Aashu and the Virtual Brain align as a client-server architecture. Aashu acts as the physical sensor/actuator body and the Virtual Brain acts as the cognitive core:
+> 1. **Sensory Ingestion (Uplink):** Aashu posts audio transcriptions, camera visual objects, and diagnostic hardware alerts to the brain's REST endpoints (`/perceive/hearing`, `/perceive/visual`, `/perceive`).
+> 2. **Heartbeat Ticking:** Aashu's background scheduler thread calls `/tick` every 10 seconds to advance the brain's cognitive cycle.
+> 3. **Action Execution (Downlink):** During startup, Aashu registers its local system tools (actuators) via `/actions/register`. When the brain ticks and selects a focal thought that matches a registered pattern, the API response contains a `tool_call` object (e.g., `{"name": "take_screenshot", "arguments": {}}`).
+> 4. **Execution and Feedback:** Aashu detects this `tool_call`, executes the tool locally, and posts the output back to the brain as a raw experience perception (`tool_result`) so the brain can perceive the result of its own commands in the next tick.
 
 ---
 
@@ -464,5 +478,47 @@ Subconscious and preconscious processes run silently under the hood, updating ph
 5. **Decoupled Background Drives (`development/`)**:
    * *Biological Equivalent*: Core evolutionary drives (curiosity, goal-seeking, social attachment) that run automatically to ensure survival.
    * *How it works in Code*: The `AttachmentSystem`, `CuriosityEngine`, and `GoalSystem` run background counters (e.g., tracking context frequencies, calculating bonding decay ratios). These systems silently feed curiosity bonuses and relevance factors into thoughts, guiding what the conscious mind chooses to focus on.
+
+---
+
+## 7. Aashu Assistant Integration & Command Loop
+
+This section details the design, communication flow, and execution mechanisms governing how the Aashu client agent interacts with the Virtual Brain API.
+
+### A. Client-Server Architecture Overview
+The integration is split across network boundaries:
+*   **Virtual Brain Server (`api_server.py`)**: Runs a FastAPI application that serves as the centralized REST gateway. It processes perceptions, maintains homeostatic dynamics, performs ticks, and handles tool routing.
+*   **Aashu Agent (`aashu/agent.py`)**: Runs a client process that coordinates audio-visual sensors, registers actuators, queries local LLMs, and executes OS commands.
+
+### B. Sensory Uplink (Perception Pipelines)
+Aashu maps hardware signals into REST API payloads and updates the brain:
+1.  **Audio Feed (`aashu/ears.py`)**: Listens for voice, triggers on a configured wake word, transcribes the speech, and invokes `/perceive/hearing` with prosody information, keywords, and sentiment score.
+2.  **Visual Feed (`aashu/eyes.py`)**: A thread running OpenCV. It detects environment objects, relationships, and motion activity, posting structured updates to `/perceive/visual`.
+3.  **Somatic/Body Feed (`aashu/agent.py`)**: Hardware monitoring thread that tracks CPU utilization and battery statistics. Critical levels (CPU > 85% or Battery < 20%) trigger a negative-valence somatic sensation posted via `/perceive`.
+
+### C. Heartbeat & Tick Control
+The brain is a REST endpoint and requires execution ticks to simulate cognitive progression:
+*   **Aashu Scheduler (`aashu/scheduler.py`)**: A background thread running a periodic loop. Every 10 seconds, it makes a POST request to `/tick`.
+*   **Tick Output**: The server returns active workspace focus content, current neurochemistry, and any generated tool calls (`tool_call`).
+
+### D. Downlink Command Execution (Actuators)
+The cognitive mind drives the physical helper body via registered tools:
+1.  **Tool Registration**: On startup, Aashu inspects `AashuActuators` (`aashu/actuators.py`), gathers tool definitions (name, description, schema, and regex patterns), and registers them via `/actions/register`.
+2.  **Matching in the Brain**: During a tick, if the selected `current_focus.content` matches a registered tool's regex pattern, the brain's `ToolConnector` intercepts it and constructs a `tool_call` object.
+3.  **Command Execution Loop**:
+    *   The `tool_call` containing tool name and arguments is returned in the `/tick` API response.
+    *   Aashu identifies the `tool_call`, announces it via TTS, and dispatches it to `actuators.execute_tool(name, arguments)`.
+    *   Actuators run local operations (e.g., executing shell scripts, creating local workspace files, adjusting speaker settings, querying Wikipedia, or playing audio files).
+    *   Aashu posts the output back to the brain via `/perceive` as an experience event tagged with the `tool_result` category.
+    *   Aashu issues a secondary `/tick` call so the brain immediately perceives the success/failure outcome of its own command.
+
+### E. Speech Synthesis & Personality Regulation
+The brain's homeostatic states directly filter and shape how Aashu communicates:
+1.  **Dynamic Personality Prompts**: Aashu queries a local Ollama instance for text generation. The system prompt incorporates the brain's current emotional mood, narrative, and chemical levels.
+2.  **Chemical Directives**:
+    *   *Cortisol > 70*: Answer with caution and brevity.
+    *   *Melatonin > 70*: Speak slowly with sleep cues, recommending brain rest.
+    *   *Dopamine > 75*: Speak with high optimism and creativity.
+3.  **Speech Regulation Endpoint**: Before feeding the text to TTS, Aashu sends it to `/regulate_speech`. The brain applies truncation rules, developmental limits (child vs. adult vocabulary lengths), and oxytocin empathy prefixes.
 
 

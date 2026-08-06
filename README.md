@@ -64,6 +64,26 @@ In simulate mode:
 4. Brain runs `tick()`, selecting the winning thought via the Global Workspace.
 5. The winning thought gates the `DecisionEngine` and the look-ahead `StrategicPlanner` to select an action, apply feedback, calculate regret/wisdom, and update RL Q-values.
 
+## Aashu Assistant Integration
+
+The repository includes a physical assistant interface named **Aashu** (located in the [aashu](file:///home/gabrialdeora/D-drive/Brain-Simulator/aashu) folder). Aashu acts as the physical "body" (handling audio/visual inputs and system action execution), while the Virtual Brain acts as the cognitive "mind".
+
+### How Aashu and the Virtual Brain Connect
+
+Aashu runs as a client and connects to the Virtual Brain server (running on `api_server.py`) using the REST APIs defined in [brain_client.py](file:///home/gabrialdeora/D-drive/Brain-Simulator/aashu/brain_client.py).
+
+1. **Sensory Uplink:** 
+   - **Hearing (`ears.py`):** Captures voice inputs, transcribes them, and sends them to the brain's hearing pipeline (`/perceive/hearing`).
+   - **Vision (`eyes.py`):** Uses OpenCV camera streams to recognize objects/motion, posting them to the brain's visual pipeline (`/perceive/visual`).
+   - **Somatic Alerts (`agent.py`):** Runs a background hardware monitor thread to ingest CPU and battery stress signals into the brain's raw perception feed.
+2. **Heartbeat Ticking:** The background autonomous scheduler (`scheduler.py`) triggers a cognitive tick (`/tick`) in the brain every 10 seconds.
+3. **Command Downlink (Actuators):** 
+   - On startup, Aashu registers its local system tools (defined in [actuators.py](file:///home/gabrialdeora/D-drive/Brain-Simulator/aashu/actuators.py)) with the Virtual Brain.
+   - When the brain ticks and makes a strategic decision to act, it returns a `tool_call` command block in the API response.
+   - Aashu catches this command, announces it, and executes the physical tool locally (e.g., searching the web, adjusting system volume, playing music, taking screenshots, or modifying file contents).
+   - Once executed, Aashu sends the command outcome back to the brain as an experience perception to complete the cognitive loop.
+4. **Speech & Mood Alignment:** Aashu uses a local Ollama LLM to synthesize speech responses. The system prompt is dynamically updated with the brain's current focus, emotional mood, and neurochemical personality directives. The response is regulated through the brain's `/regulate_speech` endpoint before being spoken out loud.
+
 ## Programmatic Perception APIs
 
 You can feed external sensors without changing the core loop.

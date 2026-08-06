@@ -25,6 +25,8 @@ from utils.text_processor import TextProcessor
 from utils.speech_regulator import SpeechRegulator
 from core.sensory_parser import SensoryParser
 from core.sleep_manager import SleepManager
+from core.tool_connector import ToolConnector
+
 
 DEFAULT_BIAS_CONFIGS = {
     "negativity_bias": {
@@ -260,6 +262,8 @@ class VirtualBrain:
         self._original_baselines = {name: float(config["baseline"]) for name, config in chemical_configs.items()}
         self.bias_engine = BiasEngine(DEFAULT_BIAS_CONFIGS, DEFAULT_BIAS_MAPPING)
         self._last_maturity = self.development.maturity
+        self.tool_connector = ToolConnector()
+        self.latest_tool_call = None
 
     def _run_sleep_cycle(self) -> dict[str, Any]:
         return self.sleep_manager.run_sleep_cycle(self)
@@ -361,6 +365,12 @@ class VirtualBrain:
             love_score=self.love_score,
             loved_source=self.loved_source,
         )
+
+        # Match tool connector against current focus
+        self.latest_tool_call = None
+        if self.current_focus:
+            self.latest_tool_call = self.tool_connector.match_thought(self.current_focus.content)
+
 
         # Calculate active Love Score based on current focus and chemical levels
         self.love_score = 0.0
