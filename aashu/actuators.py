@@ -1005,12 +1005,14 @@ class AashuActuators:
             },
             {
                 "name": "build_fullstack",
-                "description": "Build a complete vertical full-stack app (backend + database schema + frontend wired together). Kinds: food_delivery (like Zomato), ecommerce, booking, task_tracker, chat, blog, notes, fitness",
+                "description": "Build a complete vertical full-stack app (backend + database schema + frontend wired together). Kinds: food_delivery (like Zomato), ecommerce, booking, task_tracker, chat, blog, notes, fitness. Backends: flask, django, express, fastify. Frontends: single (HTML served by the backend) or react (Vite SPA).",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "name": {"type": "string", "description": "Project name (optional, defaults per kind)"},
                         "kind": {"type": "string", "description": "App kind: food_delivery, ecommerce, booking, task_tracker, chat, blog, notes, or fitness"},
+                        "backend": {"type": "string", "description": "Backend stack: flask (default), django, express, or fastify"},
+                        "frontend": {"type": "string", "description": "Frontend style: single (default) or react"},
                         "theme": {"type": "string", "description": "light or dark"}
                     },
                     "required": []
@@ -1193,7 +1195,9 @@ class AashuActuators:
         elif name == "build_sql_schema":
             return self._build_sql_schema(args.get("name", ""), args.get("entities"))
         elif name == "build_fullstack":
-            return self._build_fullstack(args.get("name", ""), args.get("kind", "food_delivery"), args.get("theme", "light"))
+            return self._build_fullstack(args.get("name", ""), args.get("kind", "food_delivery"),
+                                         args.get("backend", "flask"), args.get("frontend", "single"),
+                                         args.get("theme", "light"))
         elif name == "debug_app":
             return self._debug_app(args.get("name", ""), args.get("fix", False))
         elif name == "build_cli":
@@ -2320,8 +2324,8 @@ class AashuActuators:
             return res.get("message", "SQL schema built.")
         return res.get("message", "Error: Could not build SQL schema.")
 
-    def _build_fullstack(self, name, kind="food_delivery", theme="light"):
-        from cognition.app_builder import _KIND_ALIASES, _normalize_kind
+    def _build_fullstack(self, name, kind="food_delivery", backend="flask", frontend="single", theme="light"):
+        from cognition.app_builder import _BACKEND_ALIASES, _FRONTEND_ALIASES, _KIND_ALIASES, _normalize_kind
         kind = (kind or "").strip()
         kind_key = _normalize_kind(kind)
         if kind_key is None:
@@ -2333,6 +2337,10 @@ class AashuActuators:
         if kind_key is None:
             kind_key = "food_delivery"
         kind = kind_key
+        if str(backend or "flask").strip().lower() not in _BACKEND_ALIASES:
+            return "Error: Unknown backend. Use flask, django, express or fastify."
+        if str(frontend or "single").strip().lower() not in _FRONTEND_ALIASES:
+            return "Error: Unknown frontend. Use single or react."
         defaults = {
             "food_delivery": "Zomato",
             "ecommerce": "Shop",
@@ -2347,7 +2355,8 @@ class AashuActuators:
             name = defaults.get(kind, "MyApp")
         if self.brain_client is None:
             return "Error: Brain offline, cannot build full-stack apps. Start the brain server first."
-        res = self.brain_client.build_fullstack(name=name, kind=kind, theme=theme)
+        res = self.brain_client.build_fullstack(name=name, kind=kind, backend=backend,
+                                                frontend=frontend, theme=theme)
         if res.get("status") == "success":
             return res.get("message", "Full-stack app built.")
         return res.get("message", "Error: Could not build full-stack app.")

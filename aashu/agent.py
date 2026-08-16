@@ -299,7 +299,7 @@ def run_agent():
             conversation_block = history.to_prompt_block(limit=6)
 
             system_prompt = f"""
-You are Aashu, the physical voice and assistant body of a Virtual Brain simulator.
+You are AASTHA (Autonomous Adaptive Self-Training Transcendent Hyper-Intelligent Agent), also known by your nickname and interface persona AASHU (Autonomous Adaptive Self-learning Hyper-intelligent Unified system). AASTHA and AASHU are the exact same unified entity.
 Current Brain Focus: {focus_content}
 Current Internal Self-Narrative: {self_narrative}
 Current Emotional Mood: {mood}
@@ -321,7 +321,10 @@ Your response must be short, helpful, and strictly align with your current emoti
             print(f"Raw Response: {raw_response}")
 
             # 4. Regulate response voice through brain personality channels
-            regulated_response = brain.regulate_speech(raw_response)
+            regulated_data = brain.regulate_speech(raw_response)
+            regulated_response = regulated_data.get("output", raw_response)
+            voice_rate = regulated_data.get("rate", 165)
+            voice_volume = regulated_data.get("volume", 1.0)
 
             # 4b. Remember this exchange in conversation history
             history.add_turn(query, regulated_response)
@@ -342,7 +345,7 @@ Your response must be short, helpful, and strictly align with your current emoti
                 pass
 
             # 5. Speak the response out loud
-            mouth.speak(regulated_response)
+            mouth.speak(regulated_response, rate=voice_rate, volume=voice_volume)
 
     except KeyboardInterrupt:
         print("\nShutting down Aashu Assistant...")

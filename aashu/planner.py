@@ -86,10 +86,23 @@ class PlanExecutor:
         }
         for kind, keys in fullstack_kinds.items():
             if any(k in goal for k in keys):
-                m = re.search(r"(?:like|called|for|named)\s+(?:a\s+)?([\w\s\-]+)", goal, re.IGNORECASE)
+                m = re.search(r"(?:called|named)\s+(?:a\s+)?([\w\s\-]+)", goal, re.IGNORECASE)
+                if not m:
+                    m = re.search(r"(?:like|for)\s+(?:a\s+)?([\w\s\-]+)", goal, re.IGNORECASE)
                 full_name = m.group(1).strip() if m else "myapp"
-                return [{"name": "build_fullstack", "arguments": {"name": full_name, "kind": kind, "theme": "light"},
-                         "description": f"Build a {kind} full-stack app named {full_name}"}]
+                backend = "flask"
+                for token, name in [("django", "django"), ("express", "express"), ("fastify", "fastify")]:
+                    if token in goal.lower():
+                        backend = name
+                        break
+                frontend = "single"
+                if re.search(r"\breact\b", goal.lower()):
+                    frontend = "react"
+                return [{"name": "build_fullstack", "arguments": {"name": full_name, "kind": kind,
+                                                                  "backend": backend, "frontend": frontend,
+                                                                  "theme": "light"},
+                         "description": f"Build a {kind} full-stack app named {full_name} "
+                                        f"({backend} backend, {frontend} frontend)"}]
 
         # ---- App / website / CLI generation ----
         m = re.search(r"build\s+(?:a|an)?\s*(react ?app|angular ?app|vue ?app|node ?server|express ?server|api ?server|sql schema|sql database|website|c#|web ?app|webapp|cli|tool|app)\s+(?:called|for|named)?\s*([\w\s\-]+)", goal, re.IGNORECASE)

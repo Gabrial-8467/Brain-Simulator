@@ -29,17 +29,22 @@ class AashuMouth:
             print(f"Failed to initialize pyttsx3 voice engine: {e}")
             self.engine = None
 
-    def speak(self, text):
+    def speak(self, text, rate=None, volume=None):
         """Converts text to speech and outputs it through the speakers."""
         if not text:
             return
         
-        print(f"Aashu Speaks: {text}")
+        target_rate = rate if rate is not None else self.rate
+        target_volume = volume if volume is not None else self.volume
+        
+        print(f"Aashu Speaks: {text} (rate={target_rate}, volume={target_volume})")
         
         if not self.engine:
             return
         
         try:
+            self.engine.setProperty("rate", target_rate)
+            self.engine.setProperty("volume", target_volume)
             self.engine.say(text)
             self.engine.runAndWait()
         except Exception as e:
@@ -47,8 +52,11 @@ class AashuMouth:
             # Try to reinitialize in case engine session became corrupted
             self._init_engine()
             try:
-                self.engine.say(text)
-                self.engine.runAndWait()
+                if self.engine:
+                    self.engine.setProperty("rate", target_rate)
+                    self.engine.setProperty("volume", target_volume)
+                    self.engine.say(text)
+                    self.engine.runAndWait()
             except:
                 pass
 

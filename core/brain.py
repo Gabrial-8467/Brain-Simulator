@@ -1689,13 +1689,36 @@ class VirtualBrain:
 
     def regulate_speech(self, text: str):
         state = self.get_state()
-        return self.speech_regulator.regulate(
+        regulated_text = self.speech_regulator.regulate(
             text=text,
             fatigue=self.fatigue,
             cortisol=state.get("cortisol", 50.0),
             oxytocin=state.get("oxytocin", 50.0),
             stage=self.development_stage
         )
+        
+        # Dynamic vocal rate/volume based on neurochemical levels
+        cortisol = state.get("cortisol", 50.0)
+        dopamine = state.get("dopamine", 50.0)
+        fatigue = self.fatigue
+        
+        rate = 165
+        rate += max(-25.0, min(40.0, (cortisol - 45.0) * 0.8))
+        rate -= fatigue * 45.0
+        rate += max(0.0, (dopamine - 65.0) * 0.7)
+        rate = max(115, min(220, int(rate)))
+
+        volume = 1.0
+        volume -= fatigue * 0.35
+        if cortisol > 70:
+            volume = min(1.0, volume + 0.1)
+        volume = max(0.4, min(1.0, float(volume)))
+        
+        return {
+            "output": regulated_text,
+            "rate": rate,
+            "volume": volume
+        }
 
     def _adapt_risk(self, regret):
         if regret > 0:
@@ -2194,11 +2217,15 @@ class VirtualBrain:
         """Brain-owned SQL schema generator (gated on learned sql)."""
         return self.app_builder.build_sql_schema(name=name, entities=entities)
 
-    def build_fullstack(self, name="My App", kind="food_delivery", theme="light"):
+    def build_fullstack(self, name="My App", kind="food_delivery", backend="flask",
+                        frontend="single", theme="light"):
         """Brain-owned vertical full-stack app generator (gated on learned python).
 
-        Kinds: food_delivery, ecommerce, task_tracker, chat."""
-        return self.app_builder.build_fullstack(name=name, kind=kind, theme=theme)
+        Backends: flask, django, express, fastify. Frontends: single (HTML file
+        served by the backend) or react (Vite SPA). Kinds: food_delivery,
+        ecommerce, task_tracker, chat, booking, blog, notes, fitness."""
+        return self.app_builder.build_fullstack(name=name, kind=kind, backend=backend,
+                                                frontend=frontend, theme=theme)
 
     def debug_app(self, name="", fix=False):
         """Brain-owned deterministic app debugger: static checks + safe repair."""

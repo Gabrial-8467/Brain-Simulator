@@ -105,25 +105,36 @@ Gated on the brain having learned Python. Supported kinds:
 
 Kind aliases normalize user phrasing (`zomato` -> `food_delivery`, `cms` -> `blog`, `todo` -> `task_tracker`, ...). Each project is written to `generated_apps/<slug>/` and contains:
 
-- `backend/app.py` — Flask REST API: pbkdf2-hashed session auth (`/api/auth/register|login|logout|me`), SQLite persistence (WAL mode, busy timeout, `DATABASE_PATH` override), search + pagination (`?q=`, `?limit=`, `?offset=`), simulated payments, and Server-Sent Events for chat.
-- `backend/schema.sql` — the SQLite schema the app self-bootstraps.
-- `backend/requirements.txt` + `backend/Dockerfile` — gunicorn multi-worker deployment.
-- `docker-compose.yml` — web on `:8000` with a named volume for the SQLite store.
-- `frontend/index.html` — single-page UI wired to the API.
+- `backend/` — the REST API. Choose any of **four frameworks** via `backend=`:
+  - `flask` (default) — `app.py`
+  - `django` — `manage.py` + `config/` project with method-dispatch views, `JSON` 404 for unknown `/api/*`
+  - `express` — `server.js`
+  - `fastify` — `server.js`
+  All share one API contract: pbkdf2-hashed session auth (`/api/auth/register|login|logout|me`), search + pagination (`?q=`, `?limit=`, `?offset=`), simulated payments, Server-Sent Events for chat, JSON 404s, and the SPA fallback route.
+- `backend/schema.sql` — the SQL schema the app self-bootstraps (SQLite by default, Postgres-compatible with `SERIAL PRIMARY KEY`).
+- `backend/requirements.txt` (Python) or `backend/package.json` (Node) + `backend/Dockerfile` — gunicorn or node multi-worker deployment.
+- `docker-compose.yml` — web on `:8000` (Python) / `:3000` (Node) plus an optional **PostgreSQL 16 service**; the app auto-detects `DATABASE_URL` (Postgres) vs `DATABASE_PATH` (SQLite, zero-config dev fallback).
+- `frontend/` — choose the frontend via `frontend=`:
+  - `single` (default) — `index.html` single-page UI served by the backend
+  - `react` — a full **React + Vite SPA** (`src/` + `package.json` + `vite.config.js`); the backend serves `dist/` after `npm run build`
 - `README.md` — dev and production-ish run steps for that specific app.
+
+```python
+ok, msg = brain.build_fullstack("BookIt", kind="booking", backend="django", frontend="react")
+```
 
 ### Deterministic Debugger (`debug_app`)
 
-Scans a generated project and reports a structured bug list (severity + location + message):
+Scans a generated project (framework-aware: it locates `app.py`, `manage.py`, or `server.js`) and reports a structured bug list (severity + location + message):
 
 - leftover template tokens (`{{...}}`, `%TOKEN%`)
-- Python syntax errors
+- syntax errors (Python `py_compile`, Node `node --check`)
 - backend-referenced tables missing from the schema (including collection/catalog table constants)
 - seed inserts into unknown tables
-- frontend `api()` / `EventSource()` calls with no matching backend route
-- missing SQLite bootstrap (`_init_db`)
+- frontend `api()` / `EventSource()` calls with no matching backend route (method-aware, balanced-paren parsing)
+- missing DB bootstrap (`_init_db`)
 
-With `fix=True`, it repairs in place when the fix is unambiguous: rename a single unused table to the single missing table (e.g. `bookings` -> `orders`), insert a missing `_init_db()` call, or rebuild a brain-generated app from its template.
+With `fix=True`, it repairs in place when the fix is unambiguous: rename a single unused table to the single missing table (e.g. `bookings` -> `orders`), insert a missing `_init_db()` call, or rebuild a brain-generated app from its template (restricted to non-Django backends).
 
 ```python
 ok, msg = brain.build_fullstack("BookIt", kind="booking")

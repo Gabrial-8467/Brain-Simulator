@@ -110,8 +110,10 @@ class InProcessBrainClient:
         ok, result = self.brain.build_sql_schema(name=name, entities=entities)
         return {"status": "success" if ok else "not_learned", "message": result}
 
-    def build_fullstack(self, name="My App", kind="food_delivery", theme="light"):
-        ok, result = self.brain.build_fullstack(name=name, kind=kind, theme=theme)
+    def build_fullstack(self, name="My App", kind="food_delivery", backend="flask",
+                        frontend="single", theme="light"):
+        ok, result = self.brain.build_fullstack(name=name, kind=kind, backend=backend,
+                                                frontend=frontend, theme=theme)
         return {"status": "success" if ok else "not_learned", "message": result}
 
     def build_cli(self, name="tool", task=None, args=None):
@@ -354,6 +356,15 @@ def main():
         fullstack_kinds = {"food_delivery", "ecommerce", "booking", "task_tracker", "chat", "blog", "notes", "fitness"}
         ok, msg = builder(name, kind=kind) if kind in fullstack_kinds else builder(name)
         print(f"\nbuild_{'fullstack' if kind in fullstack_kinds else kind}({name!r}) ->\n  {msg}")
+
+    print("\n  Same vertical app on every backend / frontend (deterministic templates):")
+    for name, backend, frontend in [("BookItDj", "django", "single"), ("BookItEx", "express", "react"),
+                                    ("BookItFx", "fastify", "react")]:
+        ok, msg = brain.build_fullstack(name, kind="booking", backend=backend, frontend=frontend)
+        print(f"\nbuild_fullstack({name!r}, kind='booking', backend={backend!r}, frontend={frontend!r}) ->\n  {msg}")
+    for name in ("BookItDj", "BookItEx", "BookItFx"):
+        rep = brain.debug_app(name)
+        print(f"debug_app({name!r}) -> ok={rep['ok']}, bugs={len(rep['bugs'])}")
 
     ok, msg = brain.build_sql_schema("orders", entities="users;orders;products")
     print(f"\nbuild_sql_schema('orders') ->\n  {msg}")

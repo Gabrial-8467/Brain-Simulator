@@ -89,10 +89,15 @@ class BrainClient:
         try:
             r = requests.post(f"{self.base_url}/regulate_speech", json={"text": text}, timeout=1.5)
             if r.status_code == 200:
-                return r.json().get("output", text)
+                data = r.json()
+                return {
+                    "output": data.get("output", text),
+                    "rate": data.get("rate", 165),
+                    "volume": data.get("volume", 1.0)
+                }
         except Exception:
             pass
-        return text
+        return {"output": text, "rate": 165, "volume": 1.0}
 
     def force_sleep(self, duration=5):
         try:
@@ -264,10 +269,12 @@ class BrainClient:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
-    def build_fullstack(self, name="My App", kind="food_delivery", theme="light"):
+    def build_fullstack(self, name="My App", kind="food_delivery", backend="flask",
+                        frontend="single", theme="light"):
         try:
             r = requests.post(f"{self.base_url}/brain/build_fullstack", json={
-                "name": name, "kind": kind, "theme": theme,
+                "name": name, "kind": kind, "backend": backend,
+                "frontend": frontend, "theme": theme,
             }, timeout=10.0)
             return r.json()
         except Exception as e:

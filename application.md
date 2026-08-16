@@ -46,16 +46,19 @@ This document lists realistic applications based on features that are currently 
 
 The brain generates complete, runnable vertical applications (deterministically, no LLM):
 
-- **Eight full-stack kinds**: `food_delivery`, `ecommerce`, `booking`, `task_tracker`, `chat`, `blog`, `notes`, `fitness` — each producing a Flask REST backend, SQLite schema, single-page frontend, Docker deployment files, and per-app README.
+- **Eight full-stack kinds**: `food_delivery`, `ecommerce`, `booking`, `task_tracker`, `chat`, `blog`, `notes`, `fitness`.
+- **Four backends**: `flask` (default), `django`, `express`, `fastify` — one shared API contract (session auth, search + pagination, simulated payments, SSE chat, JSON 404s, SPA fallback). Django builds use a `config/` project with method-dispatch views; Node builds share a synchronous (`better-sqlite3`) / async (`pg`) data layer.
+- **Two frontends**: `single` (HTML served by the backend) or `react` (full Vite SPA served from `dist/` after build).
+- **Databases**: SQLite is the zero-config dev default; setting `DATABASE_URL` switches any backend to PostgreSQL automatically (`SERIAL PRIMARY KEY` schema, `docker-compose.yml` includes a `postgres:16` service).
 - **Learned-language gating**: generation is blocked until the brain has learned the required language from perceptions, so capabilities are tied to demonstrated knowledge rather than assumed.
-- **Out-of-the-box vertical features**: pbkdf2-hashed session auth, SQLite persistence (WAL mode, `DATABASE_PATH` override), search + pagination, simulated payments, and real-time chat via Server-Sent Events.
+- **Out-of-the-box vertical features**: pbkdf2-hashed session auth, search + pagination, simulated payments, and real-time chat via Server-Sent Events.
 - **Kind aliases**: natural phrasing such as "zomato", "cms", "todo", or "workout" is normalized to the matching kind.
 
 ## 9. Deterministic Self-Debugging & Auto-Repair
 
-- **Static bug detection**: scan a generated project for leftover template tokens, Python syntax errors, backend-referenced tables missing from the schema, seed inserts into unknown tables, frontend route calls with no matching backend route, and missing SQLite bootstrap.
+- **Static bug detection**: scan a generated project (framework-aware: `app.py`, `manage.py`, or `server.js`) for leftover template tokens, syntax errors (Python `py_compile`, Node `node --check`), backend-referenced tables missing from the schema, seed inserts into unknown tables, frontend route calls with no matching backend route (method-aware), and missing DB bootstrap.
 - **Structured reports**: every bug carries a severity, file location, and human-readable message; report-only mode never modifies the project.
-- **Safe in-place repair**: with `fix=True` the brain renames an unused declared table to the missing referenced table, inserts a missing `_init_db()` call, or deterministically rebuilds the app from its template when consistency errors remain.
+- **Safe in-place repair**: with `fix=True` the brain renames an unused declared table to the missing referenced table, inserts a missing `_init_db()` call, or deterministically rebuilds the app from its template (non-Django backends) when consistency errors remain.
 - **Verification loop**: after a repair the debugger is re-run and must report zero bugs; live test-client flows (register → authenticate → CRUD → authorization boundaries) confirm the app still works.
 
 ## Non-goals in Current Repository

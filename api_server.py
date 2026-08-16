@@ -101,6 +101,8 @@ class BuildSqlSchemaRequest(BaseModel):
 class BuildFullstackRequest(BaseModel):
     name: Optional[str] = "My App"
     kind: Optional[str] = "food_delivery"
+    backend: Optional[str] = "flask"
+    frontend: Optional[str] = "single"
     theme: Optional[str] = "light"
 
 class DebugAppRequest(BaseModel):
@@ -376,8 +378,13 @@ def get_state():
 def post_regulate_speech(req: SpeechRegulationRequest):
     if not brain:
         raise HTTPException(status_code=500, detail="Brain not initialized")
-    regulated = brain.regulate_speech(req.text)
-    return {"input": req.text, "output": regulated}
+    res = brain.regulate_speech(req.text)
+    return {
+        "input": req.text,
+        "output": res["output"],
+        "rate": res["rate"],
+        "volume": res["volume"]
+    }
 
 # =====================================================
 # BRAIN COGNITION ENDPOINTS (summarization / code generation)
@@ -488,7 +495,8 @@ def post_brain_build_sql_schema(req: BuildSqlSchemaRequest):
 def post_brain_build_fullstack(req: BuildFullstackRequest):
     if not brain:
         raise HTTPException(status_code=500, detail="Brain not initialized")
-    ok, result = brain.build_fullstack(name=req.name, kind=req.kind, theme=req.theme)
+    ok, result = brain.build_fullstack(name=req.name, kind=req.kind, backend=req.backend,
+                                       frontend=req.frontend, theme=req.theme)
     return {"status": "success" if ok else "not_learned", "message": result}
 
 @app.post("/brain/build_cli")
