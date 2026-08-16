@@ -1,0 +1,20 @@
+# Render Blueprint specification for the Virtual Brain API server
+services:
+  - type: web
+    name: virtual-brain-server
+    env: docker
+    dockerfilePath: Dockerfile
+    # Note: Free tier does not support persistent disks. To persist memory state,
+    # you must use a paid tier (e.g. starter/standard) and attach a disk.
+    plan: starter
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: BRAIN_DATA_DIR
+        value: /data
+      - key: BRAIN_API_KEY
+        generateValue: true  # Render will automatically auto-generate a secure random API key
+    disk:
+      name: brain-data
+      mountPath: /data
+      sizeGB: 1

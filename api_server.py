@@ -4,7 +4,8 @@ import argparse
 import copy
 import yaml
 from typing import Any, Dict, List, Optional
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Depends, Security
+from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel, Field
 
 # Ensure project root is in python path
@@ -15,10 +16,23 @@ from decision.decision_engine import DecisionEngine
 from memory.memory_manager import MemoryManager
 from utils.logger import BrainLogger
 
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+def verify_api_key(request: Request, api_key: str = Security(api_key_header)):
+    # Skip authentication for public root welcome endpoint
+    if request.url.path == "/":
+        return api_key
+    expected_key = os.getenv("BRAIN_API_KEY")
+    if expected_key:
+        if api_key != expected_key:
+            raise HTTPException(status_code=401, detail="Invalid API Key or X-API-Key header missing")
+    return api_key
+
 app = FastAPI(
     title="Virtual Brain API Server",
     description="REST API Gateway for the Developmental Cognitive Virtual Brain (Aashu Integration)",
-    version="1.0.0"
+    version="1.0.0",
+    dependencies=[Depends(verify_api_key)]
 )
 
 # Logger
@@ -176,15 +190,20 @@ def init_brain(deterministic: bool = False):
     except Exception as e:
         logger.warning(f"Failed to load brain config: {e}. Using defaults.")
 
-    # 2. Memory
-    memory_manager = MemoryManager(storage_path="memory_store.json")
+    # 2. Memory Paths
+    data_dir = os.getenv("BRAIN_DATA_DIR", ".")
+    os.makedirs(data_dir, exist_ok=True)
+    memory_store_path = os.path.join(data_dir, "memory_store.json")
+    memory_events_path = os.path.join(data_dir, "memory_events.json")
+
+    memory_manager = MemoryManager(storage_path=memory_store_path)
     loaded_state = None
-    if os.path.exists("memory_store.json"):
+    if os.path.exists(memory_store_path):
         try:
             payload = memory_manager.load()
             if isinstance(payload, dict):
                 loaded_state = payload
-                logger.info("Loaded persisted brain state from memory_store.json")
+                logger.info(f"Loaded persisted brain state from {memory_store_path}")
         except Exception as e:
             logger.warning(f"Failed to load state: {e}. Starting fresh.")
 
@@ -200,6 +219,7 @@ def init_brain(deterministic: bool = False):
         decision_engine=decision_engine,
         deterministic=deterministic,
         brain_config=brain_config,
+        memory_storage_path=memory_events_path,
     )
 
     if loaded_state:
@@ -635,7 +655,10 @@ def post_reset(req: ResetRequest):
         
     if req.hard_reset:
         logger.info("Performing hard reset...")
-        for file_path in ["memory_store.json", "memory_events.json"]:
+        data_dir = os.getenv("BRAIN_DATA_DIR", ".")
+        memory_store_path = os.path.join(data_dir, "memory_store.json")
+        memory_events_path = os.path.join(data_dir, "memory_events.json")
+        for file_path in [memory_store_path, memory_events_path]:
             if os.path.exists(file_path):
                 try:
                     os.remove(file_path)
@@ -666,8 +689,14 @@ if __name__ == "__main__":
     parser.add_argument("--deterministic", action="store_true", help="Run brain without stochastic noise")
     args = parser.parse_args()
 
+    # Bind to PORT environment variable if present (for cloud platforms like Render)
+    port = int(os.getenv("PORT", args.port))
+    host = os.getenv("HOST", args.host)
+    if os.getenv("PORT"):
+        host = "0.0.0.0"
+
     # Initialize brain before starting FastAPI web server
     init_brain(deterministic=args.deterministic)
 
     import uvicorn
-    uvicorn.run(app, host=args.host, port=args.port)
+    uvicorn.run(app, host=host, port=port)

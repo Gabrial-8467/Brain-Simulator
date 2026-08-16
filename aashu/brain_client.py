@@ -1,9 +1,37 @@
-import requests
-from .config import BRAIN_API_URL
+import requests as requests_module
+from .config import BRAIN_API_URL, BRAIN_API_KEY
+
+_active_client = None
+
+class _RequestsWrapper:
+    @staticmethod
+    def get(url, *args, **kwargs):
+        global _active_client
+        api_key = _active_client.api_key if _active_client else BRAIN_API_KEY
+        if api_key:
+            headers = kwargs.setdefault("headers", {})
+            if "X-API-Key" not in headers:
+                headers["X-API-Key"] = api_key
+        return requests_module.get(url, *args, **kwargs)
+
+    @staticmethod
+    def post(url, *args, **kwargs):
+        global _active_client
+        api_key = _active_client.api_key if _active_client else BRAIN_API_KEY
+        if api_key:
+            headers = kwargs.setdefault("headers", {})
+            if "X-API-Key" not in headers:
+                headers["X-API-Key"] = api_key
+        return requests_module.post(url, *args, **kwargs)
+
+requests = _RequestsWrapper
 
 class BrainClient:
-    def __init__(self, base_url=BRAIN_API_URL):
+    def __init__(self, base_url=BRAIN_API_URL, api_key=None):
+        global _active_client
         self.base_url = base_url
+        self.api_key = api_key or BRAIN_API_KEY
+        _active_client = self
 
     def check_connection(self):
         try:
