@@ -42,13 +42,29 @@ This document lists realistic applications based on features that are currently 
 - Demonstrate multi-cycle stateful, biologically inspired cognition to students or research teams.
 - Use the CLI simulation mode to inspect full state logs at each step or live mode for manual interactive debug scenarios.
 
+## 8. Automated Application Scaffolding
+
+The brain generates complete, runnable vertical applications (deterministically, no LLM):
+
+- **Eight full-stack kinds**: `food_delivery`, `ecommerce`, `booking`, `task_tracker`, `chat`, `blog`, `notes`, `fitness` — each producing a Flask REST backend, SQLite schema, single-page frontend, Docker deployment files, and per-app README.
+- **Learned-language gating**: generation is blocked until the brain has learned the required language from perceptions, so capabilities are tied to demonstrated knowledge rather than assumed.
+- **Out-of-the-box vertical features**: pbkdf2-hashed session auth, SQLite persistence (WAL mode, `DATABASE_PATH` override), search + pagination, simulated payments, and real-time chat via Server-Sent Events.
+- **Kind aliases**: natural phrasing such as "zomato", "cms", "todo", or "workout" is normalized to the matching kind.
+
+## 9. Deterministic Self-Debugging & Auto-Repair
+
+- **Static bug detection**: scan a generated project for leftover template tokens, Python syntax errors, backend-referenced tables missing from the schema, seed inserts into unknown tables, frontend route calls with no matching backend route, and missing SQLite bootstrap.
+- **Structured reports**: every bug carries a severity, file location, and human-readable message; report-only mode never modifies the project.
+- **Safe in-place repair**: with `fix=True` the brain renames an unused declared table to the missing referenced table, inserts a missing `_init_db()` call, or deterministically rebuilds the app from its template when consistency errors remain.
+- **Verification loop**: after a repair the debugger is re-run and must report zero bugs; live test-client flows (register → authenticate → CRUD → authorization boundaries) confirm the app still works.
+
 ## Non-goals in Current Repository
 
 The current project does not implement:
 
-- Production-grade external database layer (it utilizes a local JSON storage file).
+- Production-grade external database layer (the brain's own state is a local JSON storage file; generated apps persist to local SQLite, with the generated README documenting a PostgreSQL migration path).
 - Multi-agent networked environment.
 - Live camera feed or audio capture CLI tools.
-- Direct LLM conversational wrapper.
+- Direct LLM conversational wrapper (Aashu uses a local Ollama instance purely for speech synthesis, never for code generation, planning, or debugging).
 
 The codebase is best used as a research/development cognitive simulation core.

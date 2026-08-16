@@ -84,6 +84,61 @@ Aashu runs as a client and connects to the Virtual Brain server (running on `api
    - Once executed, Aashu sends the command outcome back to the brain as an experience perception to complete the cognitive loop.
 4. **Speech & Mood Alignment:** Aashu uses a local Ollama LLM to synthesize speech responses. The system prompt is dynamically updated with the brain's current focus, emotional mood, and neurochemical personality directives. The response is regulated through the brain's `/regulate_speech` endpoint before being spoken out loud.
 
+## Brain-Owned App Generation & Debugging
+
+The Virtual Brain also acts as a **deterministic application generator and debugger**. No external LLM is involved: output is produced from declarative templates and static analysis, so identical inputs always produce identical apps.
+
+### Full-Stack Generator (`build_fullstack`)
+
+Gated on the brain having learned Python. Supported kinds:
+
+| Kind | Mode | Example |
+| :--- | :--- | :--- |
+| `food_delivery` | cart + checkout | ZomatoClone |
+| `ecommerce` | cart + checkout | ShopNow |
+| `booking` | cart + checkout (services) | BookIt |
+| `task_tracker` | private collection | TodoPro |
+| `chat` | collection + real-time SSE | Chatter |
+| `blog` | public collection (read-only to guests) | DevBlog |
+| `notes` | private collection | QuickNotes |
+| `fitness` | private collection | FitLog |
+
+Kind aliases normalize user phrasing (`zomato` -> `food_delivery`, `cms` -> `blog`, `todo` -> `task_tracker`, ...). Each project is written to `generated_apps/<slug>/` and contains:
+
+- `backend/app.py` — Flask REST API: pbkdf2-hashed session auth (`/api/auth/register|login|logout|me`), SQLite persistence (WAL mode, busy timeout, `DATABASE_PATH` override), search + pagination (`?q=`, `?limit=`, `?offset=`), simulated payments, and Server-Sent Events for chat.
+- `backend/schema.sql` — the SQLite schema the app self-bootstraps.
+- `backend/requirements.txt` + `backend/Dockerfile` — gunicorn multi-worker deployment.
+- `docker-compose.yml` — web on `:8000` with a named volume for the SQLite store.
+- `frontend/index.html` — single-page UI wired to the API.
+- `README.md` — dev and production-ish run steps for that specific app.
+
+### Deterministic Debugger (`debug_app`)
+
+Scans a generated project and reports a structured bug list (severity + location + message):
+
+- leftover template tokens (`{{...}}`, `%TOKEN%`)
+- Python syntax errors
+- backend-referenced tables missing from the schema (including collection/catalog table constants)
+- seed inserts into unknown tables
+- frontend `api()` / `EventSource()` calls with no matching backend route
+- missing SQLite bootstrap (`_init_db`)
+
+With `fix=True`, it repairs in place when the fix is unambiguous: rename a single unused table to the single missing table (e.g. `bookings` -> `orders`), insert a missing `_init_db()` call, or rebuild a brain-generated app from its template.
+
+```python
+ok, msg = brain.build_fullstack("BookIt", kind="booking")
+report = brain.debug_app("BookIt")          # list bugs
+report = brain.debug_app("BookIt", fix=True)  # repair in place
+```
+
+Aashu reaches the same features through the planner and actuators: *"build a food delivery app like zomato"*, *"debug the BookIt app"*, *"fix the bugs in DevBlog"*.
+
+### REST Endpoints
+
+- `POST /brain/build_website`, `/brain/build_angularapp`, `/brain/build_vueapp`, `/brain/build_node_server`, `/brain/build_sql_schema`, `/brain/build_fullstack`, `/brain/build_cli`
+- `POST /brain/debug_app` — body `{"name": "...", "fix": false}`
+- `GET /brain/apps` — list projects the brain has generated
+
 ## Programmatic Perception APIs
 
 You can feed external sensors without changing the core loop.

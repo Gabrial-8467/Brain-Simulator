@@ -521,4 +521,51 @@ The brain's homeostatic states directly filter and shape how Aashu communicates:
     *   *Dopamine > 75*: Speak with high optimism and creativity.
 3.  **Speech Regulation Endpoint**: Before feeding the text to TTS, Aashu sends it to `/regulate_speech`. The brain applies truncation rules, developmental limits (child vs. adult vocabulary lengths), and oxytocin empathy prefixes.
 
+---
+
+## 8. Deterministic Code Generation & Self-Debugging
+
+Beyond modeling cognition, the Virtual Brain is also an **application-generation and self-debugging engine**. Everything in this section is fully deterministic: the planner, the code generator, and the debugger perform no LLM inference, so the same request always produces the same project and the same bug report. This is a deliberately engineered property — it makes generated output auditable, testable, and safe to auto-repair.
+
+### A. How the Full-Stack Generator Works (`cognition/app_builder.py`)
+
+`AppBuilder.build_fullstack(name, kind, theme)` emits a complete vertical slice for one of **eight kinds**: `food_delivery`, `ecommerce`, `booking`, `task_tracker`, `chat`, `blog`, `notes`, `fitness`.
+
+1. **Language Gating**: The build is gated on `self._gate("python")` — the brain will not generate Python apps until it has learned the language from perceptions, mirroring the "learn before you build" constraint used by every generator.
+2. **Kind Normalization**: User phrasing is mapped through `_normalize_kind` + `_KIND_ALIASES` (`zomato` → `food_delivery`, `cms` → `blog`, `todo` → `task_tracker`, `workout` → `fitness`, ...). Unknown kinds return a helpful error listing the available ones.
+3. **Table-Driven Templates**: Each kind is declared in the `FULLSTACK_KINDS` spec dict (title, tagline, cart-vs-collection `mode`, item fields, seed data, and full SQLite schema). Two dispatchers then render the backend and frontend:
+   - `_fullstack_backend(spec, cart_mode)` — cart kinds share a base REST API (catalog, cart, checkout/payments) keyed to the catalog table; collection kinds (tasks/messages/blog/notes/fitness) render private/public collection CRUD. Output is a Flask app: pbkdf2-hashed session auth, WAL-mode SQLite with busy timeout and `DATABASE_PATH` override, `?q=` search + `?limit/?offset=` pagination, and Server-Sent Events streaming for chat.
+   - `_fullstack_frontend(spec, name, cart_mode, theme)` — a single-page HTML/JS UI wired to the API, with theme and collection-specific labels injected.
+4. **Docker Delivery**: Every project includes `backend/requirements.txt`, a multi-worker `gunicorn` Dockerfile, `docker-compose.yml` (web on `:8000`, SQLite persisted in a named volume), and a per-app `README.md` with dev and production-ish run steps.
+
+### B. How the Deterministic Debugger Works (`debug_app`)
+
+`debug_app(name, fix=False)` performs static analysis over the generated project's `backend/app.py`, `backend/schema.sql`, and `frontend/index.html`, and returns a structured report (`{ok, bugs[{severity, location, message}], fixed[]}`).
+
+Static checks:
+
+| Check | Mechanism |
+| :--- | :--- |
+| Leftover template tokens | `"{{"` in the backend; `%UPPER%` tokens in the frontend |
+| Python syntax | `compile(backend, path, "exec")` |
+| Missing tables | regex `\b(?:FROM|JOIN|INTO|UPDATE)\s+(\w+)` minus a SQL-keyword stopword set, plus `COLLECTION_TABLE`/`CATALOG_TABLE` constants, vs. declared `CREATE TABLE` names |
+| Bad seed targets | `INSERT OR IGNORE INTO <table>` must be in the declared schema |
+| Broken frontend routes | normalize each `api()`/`EventSource()` path into segments (`{}` wildcards for dynamic expressions), then match against backend route segments with method/verb awareness |
+| Missing DB bootstrap | `sqlite3` present ⇒ an `_init_db()` definition and a non-empty `schema.sql` are required |
+
+Repairs (only when `fix=True` and the fix is unambiguous):
+
+1. **R1 – Table rename**: exactly one missing referenced table and exactly one unused declared table ⇒ rewrite the schema and backend (`bookings` → `orders`).
+2. **R2 – Bootstrap insert**: `_init_db()` defined but never called ⇒ insert the call before the `if __name__ == "__main__":` guard.
+3. **R3 – Template rebuild**: if error-severity bugs remain and the backend is brain-generated (header marker), detect the kind via `_KIND_ROUTE_HINTS`, recover the app name from the README title, and rebuild from the template — deterministic, same inputs → same output.
+
+### Q8: "How is the code generation kept deterministic while Aashu's goals are free-form text?"
+> **Answer:** The pipeline is fully rule-based. The planner (in `aashu/planner.py`) maps goal text onto structured tool calls with explicit arguments — e.g. `"build a food delivery app like zomato"` → `build_fullstack(name="zomato", kind="food_delivery")`, and `"fix the bugs in DevBlog"` → `debug_app(name="DevBlog", fix=True)`. The `ToolConnector` scores the same utterances against registered actuator patterns. The generator then renders from static spec dicts and templates, so no randomness and no LLM call enters the path. `--deterministic` mode guarantees the same thing for the cognitive simulation itself.
+
+### Q9: "Why is the debugger static rather than model-based, and how do you avoid false positives?"
+> **Answer:** Static analysis is auditable and has no inference cost, which fits a brain that must repair its own artifacts safely. False positives are controlled by construction: route matching normalizes dynamic segments to `{}` wildcards and only flags calls with **no** matching backend route; table extraction filters SQL keywords (`SET`, `WHERE`, ...) so `DO UPDATE SET ...` is not misread as a table reference; `{{` (not `}}`) is the only backend token check because `}}` legitimately appears in nested dict literals; and frontend calls with unquoted arguments are skipped because their paths are not statically resolvable. The smoke suite builds all eight kinds and asserts zero noise before any injected bug is tested.
+
+### Q10: "What does the brain actually produce, and how would you prove a repair worked?"
+> **Answer:** A complete, runnable vertical app — Flask REST backend, SQLite schema, single-page frontend, Docker deployment files, and README — with auth, payments, search + pagination, and (for chat) SSE. Repairs are proven the same way the generator is verified: rebuild deterministically, run the app's live test client (register → authenticate → create/read → verify authz boundaries such as delete-others-fails), and assert the debugger now reports zero bugs. The generated README even documents migrating the SQLite schema to PostgreSQL via SQLAlchemy for larger scale.
+
 
