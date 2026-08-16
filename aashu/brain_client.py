@@ -155,3 +155,58 @@ class BrainClient:
             return r.json()
         except Exception as e:
             return {"status": "error", "message": str(e)}
+
+    def summarize_text(self, text, max_sentences=4):
+        try:
+            r = requests.post(f"{self.base_url}/brain/summarize", json={
+                "text": text,
+                "max_sentences": max_sentences,
+            }, timeout=5.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def resolve_action(self, text, min_confidence=0.2):
+        try:
+            r = requests.post(f"{self.base_url}/brain/resolve", json={
+                "text": text,
+                "min_confidence": min_confidence,
+            }, timeout=3.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def remember_user(self, fact, fact_type="general", importance=0.6):
+        try:
+            r = requests.post(f"{self.base_url}/user_memory/remember", json={
+                "fact": fact,
+                "fact_type": fact_type,
+                "importance": importance,
+            }, timeout=3.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def get_user_context(self, context=None):
+        try:
+            r = requests.get(f"{self.base_url}/user_memory/context", params={"context": context or ""}, timeout=3.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def get_user_profile(self):
+        try:
+            r = requests.get(f"{self.base_url}/user_memory/profile", timeout=3.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def generate_code(self, task, language="python"):
+        try:
+            r = requests.post(f"{self.base_url}/brain/generate_code", json={
+                "task": task,
+                "language": language,
+            }, timeout=5.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}

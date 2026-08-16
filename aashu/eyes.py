@@ -16,6 +16,8 @@ class AashuEyes(threading.Thread):
         self.last_face_crop = None
         self.last_frame = None
         self.scene_summary = None
+        self.present_users = {}
+        self.last_presence_event = None
 
         # Load OpenCV Haar Cascade face detector
         self.face_cascade = None
@@ -108,6 +110,35 @@ class AashuEyes(threading.Thread):
             # 3. Average Brightness
             avg_brightness = float(np.mean(gray)) / 255.0
 
+            # 4. Person presence tracking (stable across frames)
+            now = time.time()
+            if recognized_user:
+                self.present_users[recognized_user] = now
+            else:
+                # Forget a user after a sustained absence
+                for name in list(self.present_users.keys()):
+                    if now - self.present_users[name] > 5.0:
+                        del self.present_users[name]
+            present = list(self.present_users.keys())
+
+            # Fire a presence event the first time a known user is seen
+            if recognized_user and (self.last_presence_event != recognized_user):
+                self.last_presence_event = recognized_user
+                threading.Thread(
+                    target=self.client.send_perception_raw,
+                    kwargs={
+                        "payload": {
+                            "content": f"The user {recognized_user} is now present in front of me",
+                            "category": "user_presence",
+                            "modality": "visual",
+                            "valence": 0.2,
+                            "intensity": 0.5,
+                            "source": "eyes",
+                        }
+                    },
+                    daemon=True
+                ).start()
+
             # Store current frame as previous for next iteration
             prev_gray = gray.copy()
 
@@ -127,6 +158,12 @@ class AashuEyes(threading.Thread):
                     else:
                         attributes["face"] = ["unknown"]
                         confidence = 0.75
+                elif present:
+                    # A known user was recently present even if not in this exact frame
+                    for name in present:
+                        objects.append(name)
+                        attributes["face"] = ["user", name]
+                        confidence = 0.85
 
                 if motion_ratio > 0.6:
                     relations.append({"from": "camera", "rel": "threat", "to": "environment"})
@@ -138,7 +175,9 @@ class AashuEyes(threading.Thread):
 
                 # Build a learning-worthy scene summary for the vision learning hook
                 summary_parts = []
-                if recognized_user:
+                if present:
+                    summary_parts.append("the user " + " and ".join(present) + " present")
+                elif recognized_user:
                     summary_parts.append(f"a face of the user {recognized_user}")
                 elif "face" in objects:
                     summary_parts.append("an unknown face")
@@ -175,3 +214,13 @@ class AashuEyes(threading.Thread):
 
     def stop(self):
         self.running = False
+
+    def recently_seen_users(self, within_seconds=30):
+        """Names of recognized users seen recently (within the window)."""
+        now = time.time()
+        return [
+            name
+            for name, seen_at in self.present_users.items()
+            if now - seen_at <= within_seconds
+        ]
+

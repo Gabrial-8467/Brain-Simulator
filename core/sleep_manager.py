@@ -14,10 +14,15 @@ class SleepManager:
         self.fatigue_accumulation_rate = 0.02
         self.fatigue_recovery_rate = 0.25
 
-        # Try to load custom sleep settings from configuration
-        if os.path.exists("config/chemicals.yaml"):
+        # Try to load custom sleep settings from configuration.
+        # The config path is resolved relative to the project root (the
+        # directory containing core/) so behavior never depends on the
+        # process working directory.
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        sleep_config_path = os.path.join(project_root, "config", "chemicals.yaml")
+        if os.path.exists(sleep_config_path):
             try:
-                with open("config/chemicals.yaml", "r") as f:
+                with open(sleep_config_path, "r") as f:
                     config = yaml.safe_load(f) or {}
                     sleep_cfg = config.get("sleep_settings", {})
                     if sleep_cfg:

@@ -84,11 +84,13 @@ DEFAULT_BIAS_MAPPING = {
 from cognition.belief_engine import BeliefEngine
 from cognition.enhanced_belief_engine import EnhancedBeliefEngine
 from cognition.narrative_engine import NarrativeEngine
+from cognition.language_cortex import LanguageCortex
 
 from decision.strategic_planner import StrategicPlanner
 from learning.appraisal_engine import AppraisalEngine
 from learning.similarity_engine import SimilarityEngine
 from memory.memory_manager import MemoryManager
+from memory.user_memory import UserMemory
 
 
 # =====================================================
@@ -309,6 +311,9 @@ class VirtualBrain:
         # Ensure persistence file exists from startup.
         self.memory_manager.storage.save()
 
+        memory_dir = os.path.dirname(os.path.abspath(self.memory_storage_path)) or "."
+        self.user_memory = UserMemory(path=os.path.join(memory_dir, "brain_user_db"))
+
         self.current_focus: Thought | None = None
         self.experience = 0.0
         self.intelligence = 0.5
@@ -355,6 +360,7 @@ class VirtualBrain:
         self.attachment_system = AttachmentSystem()
         self.curiosity_engine = CuriosityEngine()
         self.goal_system = GoalSystem()
+        self.language_cortex = LanguageCortex()
         self._social_decay_hold_counter = 0
         self._high_emotion_window = deque(maxlen=10)
         self._decision_debug: dict[str, Any] = {}
@@ -747,6 +753,16 @@ class VirtualBrain:
 
         valence = max(-1.0, min(1.0, valence))
         intensity = max(0.0, min(1.0, intensity))
+
+        # 0. Language learning: a "learning" experience teaches the brain a programming language
+        if category == "learning" and content:
+            self.language_cortex.ingest_event(content, source)
+
+        # 0b. User memory: a "user_memory" perception stores a durable fact about the user
+        if category == "user_memory" and content:
+            fact_type = _read("fact_type", "general")
+            importance = _read("importance", 0.6)
+            self.user_memory.remember(content, fact_type=fact_type, importance=importance)
 
         # 1. Observe event in Curiosity Engine
         self.curiosity_engine.observe(category or modality)
@@ -1925,6 +1941,10 @@ class VirtualBrain:
                 "attachments": dict(self.attachment_system.attachments) if hasattr(self, "attachment_system") and self.attachment_system else {},
                 "curiosity_tracker": dict(self.curiosity_engine.novelty_tracker) if hasattr(self, "curiosity_engine") and self.curiosity_engine else {},
                 "goals": dict(self.goal_system.goals) if hasattr(self, "goal_system") and self.goal_system else {},
+                "known_languages": self.language_cortex.known_languages(),
+                "language_cortex": self.language_cortex.to_state(),
+                "user_profile": self.user_memory.profile(),
+                "user_memory": self.user_memory.to_state(),
             }
         )
 
@@ -2081,5 +2101,46 @@ class VirtualBrain:
         if isinstance(goals, dict) and hasattr(self, "goal_system") and self.goal_system:
             self.goal_system.goals = copy.deepcopy(goals)
 
+        language_state = state_dict.get("language_cortex")
+        if isinstance(language_state, dict) and hasattr(self, "language_cortex"):
+            self.language_cortex.load_state(language_state)
+
+        user_memory_state = state_dict.get("user_memory")
+        if isinstance(user_memory_state, dict) and hasattr(self, "user_memory"):
+            self.user_memory.load_state(user_memory_state)
+
         self._clamp()
         self._enforce_identity_floors()
+
+    def summarize_text(self, text, max_sentences=4):
+        """Brain-owned deterministic extractive summarization."""
+        return self.language_cortex.summarize(text, max_sentences=max_sentences)
+
+    def generate_code(self, task, language):
+        """Brain-owned code generation, available only for learned languages."""
+        return self.language_cortex.generate_code(task, language)
+
+    def remember_user(self, fact, fact_type="general", importance=0.6):
+        """Store a durable fact about the user in long-term memory."""
+        item = self.user_memory.remember(fact, fact_type=fact_type, importance=importance)
+        if item:
+            name_match = re.search(r"(?:my name is|call me)\s+([a-zA-Z]+)", fact, re.IGNORECASE)
+            if name_match:
+                self.user_memory.set_user_name(name_match.group(1))
+        return item
+
+    def recall_user(self, context, limit=5):
+        """Semantically recall user facts relevant to a context."""
+        return self.user_memory.recall(context, limit=limit)
+
+    def user_context(self, context=None, limit=6):
+        """Compact personalized knowledge block for conversation."""
+        return self.user_memory.context_for_conversation(context, limit=limit)
+
+    def user_profile(self):
+        """Summary of what the brain knows about the user."""
+        return self.user_memory.profile()
+
+    def resolve_tool(self, text, min_confidence=0.2):
+        """Best-match a user query to a registered tool (deterministic)."""
+        return self.tool_connector.resolve(text, min_confidence=min_confidence)

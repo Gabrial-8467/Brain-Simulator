@@ -56,6 +56,22 @@ class VisualSignalRequest(BaseModel):
     source: Optional[str] = "vision_sensor"
     timestamp: Optional[float] = None
 
+class SummarizeTextRequest(BaseModel):
+    text: str
+    max_sentences: Optional[int] = 4
+
+class GenerateCodeRequest(BaseModel):
+    task: str
+    language: Optional[str] = "python"
+
+class ResolveActionRequest(BaseModel):
+    text: str
+
+class RememberUserRequest(BaseModel):
+    fact: str
+    fact_type: Optional[str] = "general"
+    importance: Optional[float] = 0.6
+
 class HearingSignalRequest(BaseModel):
     transcript: str
     speaker_type: Optional[str] = "unknown"
@@ -327,6 +343,54 @@ def post_regulate_speech(req: SpeechRegulationRequest):
         raise HTTPException(status_code=500, detail="Brain not initialized")
     regulated = brain.regulate_speech(req.text)
     return {"input": req.text, "output": regulated}
+
+# =====================================================
+# BRAIN COGNITION ENDPOINTS (summarization / code generation)
+# =====================================================
+
+@app.post("/brain/summarize")
+def post_brain_summarize(req: SummarizeTextRequest):
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    summary = brain.summarize_text(req.text, max_sentences=req.max_sentences)
+    return {"status": "success", "summary": summary}
+
+@app.post("/brain/generate_code")
+def post_brain_generate_code(req: GenerateCodeRequest):
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    ok, result = brain.generate_code(req.task, req.language)
+    if ok:
+        return {"status": "success", "code": result}
+    return {"status": "not_learned", "message": result}
+
+@app.post("/brain/resolve")
+def post_brain_resolve(req: ResolveActionRequest):
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    match = brain.resolve_tool(req.text)
+    if match:
+        return {"status": "success", **match}
+    return {"status": "no_match"}
+
+@app.post("/user_memory/remember")
+def post_user_memory_remember(req: RememberUserRequest):
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    item = brain.remember_user(req.fact, fact_type=req.fact_type, importance=req.importance)
+    return {"status": "success", "fact": item}
+
+@app.get("/user_memory/context")
+def get_user_memory_context(context: str = ""):
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    return {"status": "success", "context": brain.user_context(context or None)}
+
+@app.get("/user_memory/profile")
+def get_user_memory_profile():
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    return {"status": "success", "profile": brain.user_profile()}
 
 # =====================================================
 # ACTION/TOOL REGISTRY ENDPOINTS

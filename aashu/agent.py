@@ -72,7 +72,7 @@ def run_agent():
     ears = AashuEars()
     mouth = AashuMouth()
     actuators = AashuActuators(mouth=mouth, brain_client=brain)
-    learning = AashuLearning(brain_client=brain, ollama=ollama)
+    learning = AashuLearning(brain_client=brain)
     actuators.learning = learning
 
     # Verify REST Server connection
@@ -197,21 +197,28 @@ def run_agent():
             print(f" -> Brain Focus: {focus_content}")
             print(f" -> Decision Action: {action}")
 
-            # Check for tool call
-            tool_call = tick_res.get("tool_call")
+            # Deterministic tool resolution straight from the raw query.
+            # Faster and more reliable than matching the brain's internal focus.
+            direct_tool = None
+            try:
+                resolved = brain.resolve_action(query)
+                if resolved.get("status") == "success" and float(resolved.get("confidence", 0)) >= 0.5:
+                    direct_tool = {"name": resolved["name"], "arguments": resolved["arguments"]}
+                    print(f" -> Direct tool match (confidence {resolved.get('confidence')}): {resolved['name']}")
+            except Exception:
+                direct_tool = None
+
+            tool_call = None
             tool_outcome = None
 
-            if tool_call:
-                tool_name = tool_call.get("name")
-                tool_args = tool_call.get("arguments", {})
-                print(f" -> Brain requested tool call: {tool_name} with args {tool_args}")
-                
-                # Execute actuator
+            # Execute the directly resolved tool first, if any
+            if direct_tool:
+                tool_name = direct_tool["name"]
+                tool_args = direct_tool["arguments"]
                 mouth.speak(f"Executing {tool_name.replace('_', ' ')}...")
                 tool_outcome = actuators.execute_tool(tool_name, tool_args)
-                print(f" -> Tool result: {tool_outcome}")
-                
-                # Feed result back to brain as experience perception
+                print(f" -> Direct tool result: {tool_outcome}")
+
                 feedback = {
                     "content": f"Tool '{tool_name}' executed. Result: {tool_outcome}",
                     "category": "tool_result",
@@ -221,11 +228,40 @@ def run_agent():
                     "source": "actuator"
                 }
                 brain.send_perception_raw(feedback)
-                
+
                 # Re-tick to process tool outcome
                 tick_res = brain.trigger_tick()
                 focus = tick_res.get("focus", {})
                 focus_content = focus.get("content", "None") if focus else "None"
+
+            # Check for brain-initiated tool call (only if none executed directly)
+            if not direct_tool:
+                tool_call = tick_res.get("tool_call")
+                if tool_call:
+                    tool_name = tool_call.get("name")
+                    tool_args = tool_call.get("arguments", {})
+                    print(f" -> Brain requested tool call: {tool_name} with args {tool_args}")
+                    
+                    # Execute actuator
+                    mouth.speak(f"Executing {tool_name.replace('_', ' ')}...")
+                    tool_outcome = actuators.execute_tool(tool_name, tool_args)
+                    print(f" -> Tool result: {tool_outcome}")
+                    
+                    # Feed result back to brain as experience perception
+                    feedback = {
+                        "content": f"Tool '{tool_name}' executed. Result: {tool_outcome}",
+                        "category": "tool_result",
+                        "modality": "experience",
+                        "valence": 0.05,
+                        "intensity": 0.4,
+                        "source": "actuator"
+                    }
+                    brain.send_perception_raw(feedback)
+                    
+                    # Re-tick to process tool outcome
+                    tick_res = brain.trigger_tick()
+                    focus = tick_res.get("focus", {})
+                    focus_content = focus.get("content", "None") if focus else "None"
 
             # 3. Generate response using Local Ollama LLM
             state = brain.get_state() or {}
@@ -248,12 +284,21 @@ def run_agent():
                 personality_directives = "Maintain a steady, professional, helpful assistant voice."
 
             # Construct system prompt based on active brain states
+            user_context = ""
+            try:
+                ctx = brain.get_user_context(query)
+                if ctx.get("status") == "success":
+                    user_context = ctx.get("context", "")
+            except Exception:
+                user_context = ""
+
             system_prompt = f"""
 You are Aashu, the physical voice and assistant body of a Virtual Brain simulator.
 Current Brain Focus: {focus_content}
 Current Internal Self-Narrative: {self_narrative}
 Current Emotional Mood: {mood}
 Personality Directive: {personality_directives}
+{user_context}
 
 Your response must be short, helpful, and strictly align with your current emotional mood ({mood}) and active personality directives. Speak as an active assistant.
 """

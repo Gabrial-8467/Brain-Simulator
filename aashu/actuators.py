@@ -9,45 +9,29 @@ import re
 import datetime
 import time
 import threading
-import sqlite3
 import json
 import smtplib
 import random
 from email.mime.text import MIMEText
 import cv2
 from PIL import ImageGrab
-from .ollama_client import OllamaClient
+from .codegen import AashuCodeGenerator
+from .text_tools import extractive_summarize
+from .learning import KnowledgeStore
 
 class AashuActuators:
     def __init__(self, mouth=None, eyes=None, brain_client=None):
         self.mouth = mouth
         self.eyes = eyes
         self.brain_client = brain_client
-        self.db_path = "aashu_memory.db"
         self.cal_path = "aashu_calendar.json"
         self.music_process = None
-        self.ollama = OllamaClient()
         self.alarm_time = None
         self.learning = None
-        
-        self._init_db()
-        self._init_calendar()
+        self.codegen = AashuCodeGenerator()
+        self.notes = KnowledgeStore(path="aashu_notes_db", collection="aashu_notes")
 
-    def _init_db(self):
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS notes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    content TEXT NOT NULL,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            print(f"Database Init Error: {e}")
+        self._init_calendar()
 
     def _init_calendar(self):
         try:
@@ -131,7 +115,7 @@ class AashuActuators:
                     "required": ["app_name"]
                 },
                 "patterns": [
-                    r"open (browser|calculator|terminal)"
+                    r"open (?:the )?(browser|calculator|terminal|music player|file manager)"
                 ]
             },
             {
@@ -265,7 +249,10 @@ class AashuActuators:
                     "required": ["seconds", "label"]
                 },
                 "patterns": [
-                    r"set a timer for (\d+) seconds to ([\w\s\-\.\?\!\(\)]+)"
+                    r"set a timer for (\d+) seconds to ([\w\s\-\.\?\!\(\)]+)",
+                    r"set a timer for (\d+) (?:seconds|minutes|hours)",
+                    r"timer for (\d+) (?:seconds|minutes|hours)",
+                    r"remind me in (\d+) (?:seconds|minutes|hours)"
                 ]
             },
             {
@@ -285,7 +272,7 @@ class AashuActuators:
             },
             {
                 "name": "add_note",
-                "description": "Add a text note to Aashu's SQLite memory",
+                "description": "Add a text note to Aashu's vector memory",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -299,7 +286,7 @@ class AashuActuators:
             },
             {
                 "name": "get_notes",
-                "description": "List all text notes stored in Aashu's memory",
+                "description": "List all text notes stored in Aashu's vector memory",
                 "parameters": {
                     "type": "object",
                     "properties": {},
@@ -312,7 +299,7 @@ class AashuActuators:
             },
             {
                 "name": "delete_note",
-                "description": "Delete a note from memory using its integer ID",
+                "description": "Delete a note from vector memory using its integer ID",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -832,6 +819,59 @@ class AashuActuators:
                     r"list your knowledge",
                     r"show learned topics"
                 ]
+            },
+            {
+                "name": "remember_user_fact",
+                "description": "Remember a durable fact about the user (name, preferences, history, personality)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "fact": {"type": "string", "description": "The fact to remember about the user"}
+                    },
+                    "required": ["fact"]
+                },
+                "patterns": [
+                    r"remember that ([\w\s,\.']+)",
+                    r"note that ([\w\s,\.']+)",
+                    r"my name is ([\w\s]+)",
+                    r"i (like|prefer|love) ([\w\s]+)",
+                    r"remember my ([\w\s]+) is ([\w\s]+)"
+                ]
+            },
+            {
+                "name": "who_am_i",
+                "description": "Recall what I know about the user",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "context": {"type": "string", "description": "Optional context to recall relevant facts about"}
+                    },
+                    "required": []
+                },
+                "patterns": [
+                    r"who am i",
+                    r"what do you know about me",
+                    r"tell me about myself",
+                    r"what do you remember about me"
+                ]
+            },
+            {
+                "name": "execute_task",
+                "description": "Plan and execute a multi-step goal from start to finish",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "goal": {"type": "string", "description": "The high-level goal to accomplish"}
+                    },
+                    "required": ["goal"]
+                },
+                "patterns": [
+                    r"plan and ([\w\s,\.']+)",
+                    r"execute task ([\w\s,\.']+)",
+                    r"run my ([\w\s]+) routine",
+                    r"set up my day",
+                    r"break down ([\w\s,\.']+)"
+                ]
             }
         ]
 
@@ -941,6 +981,12 @@ class AashuActuators:
             return self._recall_knowledge(args.get("topic", ""))
         elif name == "what_do_i_know":
             return self._what_do_i_know()
+        elif name == "remember_user_fact":
+            return self._remember_user_fact(args.get("fact", ""))
+        elif name == "who_am_i":
+            return self._who_am_i(args.get("context", ""))
+        elif name == "execute_task":
+            return self._execute_task(args.get("goal", ""))
         return f"Error: Tool '{name}' is not registered."
 
     def _calculate(self, equation):
@@ -1173,29 +1219,36 @@ class AashuActuators:
         except Exception as e:
             return f"Face Learning Error: {e}"
 
+    def _next_note_id(self):
+        existing = self.notes.items
+        ids = [int(n.get("note_id", 0)) for n in existing if n.get("note_id")]
+        return (max(ids) + 1) if ids else 1
+
     def _add_note(self, content):
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute("INSERT INTO notes (content) VALUES (?)", (content,))
-            conn.commit()
-            conn.close()
+            content = content.strip()
+            if not content:
+                return "Error: Note content cannot be empty."
+            note_id = self._next_note_id()
+            self.notes.store({
+                "id": str(note_id),
+                "note_id": note_id,
+                "content": content,
+                "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+            })
             return f"Successfully added note: '{content}'."
         except Exception as e:
             return f"Add Note Error: {e}"
 
     def _get_notes(self):
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, content, timestamp FROM notes ORDER BY timestamp DESC")
-            rows = cursor.fetchall()
-            conn.close()
+            rows = self.notes.items
             if not rows:
-                return "No notes found in database."
+                return "No notes found in vector memory."
+            rows.sort(key=lambda n: n.get("timestamp", ""), reverse=True)
             res = []
-            for r in rows[:10]:
-                res.append(f"[{r[0]}] {r[1]} (saved {r[2]})")
+            for n in rows[:10]:
+                res.append(f"[{n.get('note_id', n['id'])}] {n.get('content', '')} (saved {n.get('timestamp', '')})")
             return "Stored Notes:\n" + "\n".join(res)
         except Exception as e:
             return f"Get Notes Error: {e}"
@@ -1203,12 +1256,16 @@ class AashuActuators:
     def _delete_note(self, note_id):
         try:
             nid = int(note_id)
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM notes WHERE id = ?", (nid,))
-            conn.commit()
-            conn.close()
-            return f"Note ID {nid} successfully deleted from SQLite memory."
+            target = None
+            for n in self.notes.items:
+                if int(n.get("note_id", -1)) == nid:
+                    target = n
+                    break
+            if target is None:
+                return f"Note ID {nid} not found in vector memory."
+            if self.notes.delete(target["id"]):
+                return f"Note ID {nid} successfully deleted from vector memory."
+            return f"Delete Note Error: could not remove note {nid}."
         except ValueError:
             return "Error: Note ID must be an integer."
         except Exception as e:
@@ -1354,11 +1411,20 @@ class AashuActuators:
                 return f"Error: File '{safe_name}' does not exist in workspace."
             with open(path, "r") as f:
                 content = f.read(5000)
-                
-            prompt = f"Please read the following document content and write a very concise 2-sentence spoken summary:\n\n{content}"
-            sys_prompt = "You are a concise document summarizing assistant. Be direct and brief."
-            summary = self.ollama.generate_response(prompt, system_prompt=sys_prompt)
-            return f"Document Summary for {safe_name}:\n{summary.strip()}"
+
+            # The brain owns summarization; fall back to local logic if offline
+            if self.brain_client:
+                try:
+                    res = self.brain_client.summarize_text(content)
+                    if isinstance(res, dict) and res.get("status") == "success":
+                        return f"Document Summary for {safe_name}:\n{res['summary']}"
+                except Exception:
+                    pass
+
+            summary = extractive_summarize(content)
+            if not summary:
+                summary = "(Document too short or empty to summarize.)"
+            return f"Document Summary for {safe_name}:\n{summary}"
         except Exception as e:
             return f"Summarization Error: {e}"
 
@@ -1814,7 +1880,7 @@ class AashuActuators:
     def _get_learning(self):
         if self.learning is None:
             from .learning import AashuLearning
-            self.learning = AashuLearning(brain_client=self.brain_client, ollama=self.ollama)
+            self.learning = AashuLearning(brain_client=self.brain_client)
         return self.learning
 
     def _learn_topic(self, topic):
@@ -1835,12 +1901,29 @@ class AashuActuators:
             return "Error: No coding task provided."
         learning = self._get_learning()
         lang = (language or "python").strip().lower()
-        knowledge_context = learning.build_knowledge_context(f"{lang} {task}")
 
         if self.mouth:
             self.mouth.speak(f"Writing {lang} code for: {task}")
 
-        code = self.ollama.generate_code(task, lang, knowledge_context)
+        # The brain generates code, but only for languages it has learned.
+        code = None
+        if self.brain_client:
+            try:
+                res = self.brain_client.generate_code(task, lang)
+                if isinstance(res, dict):
+                    if res.get("status") == "success":
+                        code = res.get("code")
+                    elif res.get("status") == "not_learned":
+                        if self.mouth:
+                            self.mouth.speak(res.get("message", "I have not learned that language yet."))
+                        return res.get("message", f"I have not learned {lang} yet.")
+            except Exception:
+                pass
+
+        if code is None:
+            # Brain offline: fall back to local knowledge-driven generation
+            knowledge_entries = learning.recall(f"{lang} {task}")
+            code = self.codegen.generate(task, lang, knowledge_entries)
 
         if not filename:
             slug = re.sub(r"[^a-zA-Z0-9_]+", "_", task.strip().lower())[:30].strip("_")
@@ -1890,4 +1973,37 @@ class AashuActuators:
         if report["topics"]:
             parts.append(f"Topics: {', '.join(report['topics'][:15])}.")
         return " ".join(parts)
+
+    def _remember_user_fact(self, fact):
+        fact = (fact or "").strip()
+        if not fact:
+            return "Error: No fact provided."
+        if self.brain_client is not None:
+            res = self.brain_client.remember_user(fact)
+            if res.get("status") == "success":
+                return f"Remembered: {fact}"
+            return f"Error: Could not store fact ({res.get('message')})."
+        return "Error: Brain offline, cannot store user memory."
+
+    def _who_am_i(self, context=""):
+        if self.brain_client is None:
+            return "Error: Brain offline, cannot recall user memory."
+        res = self.brain_client.get_user_context(context or None)
+        if res.get("status") == "success":
+            block = res.get("context", "")
+            if not block:
+                return "I don't know anything about you yet. Tell me facts like 'remember that I love jazz'."
+            return block
+        return "Error: Could not recall user memory."
+
+    def _execute_task(self, goal):
+        goal = (goal or "").strip()
+        if not goal:
+            return "Error: No goal provided."
+        # Strip planner-triggering prefixes to avoid self-recursion
+        goal = re.sub(r"^(plan and|execute task|break down)\s+", "", goal, flags=re.IGNORECASE)
+        from .planner import PlanExecutor
+        planner = PlanExecutor(self, brain_client=self.brain_client)
+        report = planner.execute(goal)
+        return planner.format_report(report)
 
