@@ -73,20 +73,32 @@ class AashuLearning:
 
     def learn_from_internet(self, query, search_fn=None, summary_fn=None):
         """Learn about a topic by pulling web snippets (and optionally a
-        Wikipedia summary) and ingesting them as knowledge."""
+        Wikipedia summary) and ingesting them as knowledge.
+
+        If the query itself names a programming language (e.g. "learn
+        reactjs", "python"), the web search is steered toward official
+        documentation for that language so the learned snippet is usable
+        by the code generator."""
         if not query:
             return None
+        topic = query.strip()
+        detected = detect_language(query) or detect_language(topic)
+        search = query
+        if detected:
+            search = f"{detected} programming language tutorial documentation example"
+            topic = f"learn {detected}" if not any(
+                w in query.lower() for w in ("learn", "tutorial", "about")) else query
         snippets = []
         if search_fn:
             try:
-                raw = search_fn(query)
+                raw = search_fn(search)
                 if isinstance(raw, str) and "Error" not in raw:
                     snippets.append(raw)
             except Exception:
                 pass
         if summary_fn:
             try:
-                raw = summary_fn(query)
+                raw = summary_fn(topic if detected else query)
                 if isinstance(raw, str) and "Error" not in raw and "not found" not in raw.lower():
                     snippets.append(raw)
             except Exception:
@@ -94,7 +106,7 @@ class AashuLearning:
         if not snippets:
             snippets.append(f"Notes on {query} (no web snippet retrieved).")
         content = "\n".join(snippets)
-        return self.learn(content, topic=query, source="internet")
+        return self.learn(content, topic=topic, source="internet")
 
     def learn_from_hearing(self, transcript, speaker="unknown"):
         if not transcript or len(transcript) < 15:

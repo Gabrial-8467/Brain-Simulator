@@ -61,6 +61,11 @@ def detect_language(text):
     if not text:
         return None
     lowered = text.lower()
+    explicit = re.search(r"(?:programming language|language of)\s+([a-z0-9_#+]+)", lowered)
+    if explicit:
+        name = explicit.group(1).strip()
+        if name in LANGUAGES:
+            return name
     for lang in sorted(LANGUAGES, key=len, reverse=True):
         if re.search(_lang_pattern(lang), lowered):
             return lang

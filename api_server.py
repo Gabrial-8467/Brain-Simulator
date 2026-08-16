@@ -89,6 +89,24 @@ class BuildCliRequest(BaseModel):
     task: Optional[str] = None
     args: Optional[str] = None
 
+class BuildNodeServerRequest(BaseModel):
+    name: Optional[str] = "My Server"
+    app_name: Optional[str] = "server"
+    endpoints: Optional[str] = None
+
+class BuildSqlSchemaRequest(BaseModel):
+    name: Optional[str] = "app"
+    entities: Optional[str] = None
+
+class BuildFullstackRequest(BaseModel):
+    name: Optional[str] = "My App"
+    kind: Optional[str] = "food_delivery"
+    theme: Optional[str] = "light"
+
+class DebugAppRequest(BaseModel):
+    name: str
+    fix: Optional[bool] = False
+
 class HearingSignalRequest(BaseModel):
     transcript: str
     speaker_type: Optional[str] = "unknown"
@@ -438,12 +456,54 @@ def post_brain_build_reactapp(req: BuildWebappRequest):
     ok, result = brain.build_reactapp(name=req.name, app_name=req.app_name, features=req.features, pages=req.pages)
     return {"status": "success" if ok else "not_learned", "message": result}
 
+@app.post("/brain/build_angularapp")
+def post_brain_build_angularapp(req: BuildWebappRequest):
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    ok, result = brain.build_angularapp(name=req.name, app_name=req.app_name, features=req.features, pages=req.pages)
+    return {"status": "success" if ok else "not_learned", "message": result}
+
+@app.post("/brain/build_vueapp")
+def post_brain_build_vueapp(req: BuildWebappRequest):
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    ok, result = brain.build_vueapp(name=req.name, app_name=req.app_name, features=req.features, pages=req.pages)
+    return {"status": "success" if ok else "not_learned", "message": result}
+
+@app.post("/brain/build_node_server")
+def post_brain_build_node_server(req: BuildNodeServerRequest):
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    ok, result = brain.build_node_server(name=req.name, app_name=req.app_name, endpoints=req.endpoints)
+    return {"status": "success" if ok else "not_learned", "message": result}
+
+@app.post("/brain/build_sql_schema")
+def post_brain_build_sql_schema(req: BuildSqlSchemaRequest):
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    ok, result = brain.build_sql_schema(name=req.name, entities=req.entities)
+    return {"status": "success" if ok else "not_learned", "message": result}
+
+@app.post("/brain/build_fullstack")
+def post_brain_build_fullstack(req: BuildFullstackRequest):
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    ok, result = brain.build_fullstack(name=req.name, kind=req.kind, theme=req.theme)
+    return {"status": "success" if ok else "not_learned", "message": result}
+
 @app.post("/brain/build_cli")
 def post_brain_build_cli(req: BuildCliRequest):
     if not brain:
         raise HTTPException(status_code=500, detail="Brain not initialized")
     ok, result = brain.build_cli(name=req.name, task=req.task, args=req.args)
     return {"status": "success" if ok else "not_learned", "message": result}
+
+@app.post("/brain/debug_app")
+def post_brain_debug_app(req: DebugAppRequest):
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    report = brain.debug_app(name=req.name, fix=req.fix)
+    return {"status": "success", "report": report}
 
 @app.get("/brain/apps")
 def get_brain_apps():

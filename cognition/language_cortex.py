@@ -30,11 +30,13 @@ LANGUAGES = [
     # JavaScript ecosystem (frameworks, runtimes, libraries)
     "nodejs", "reactjs", "angular", "vuejs", "nextjs", "svelte", "electron",
     "express", "fastify", "nestjs", "jest", "threejs",
+    # Bare-name aliases so detection normalizes them to their dialect
+    "react", "vue", "node",
     # Python ecosystem (libraries and frameworks)
     "django", "flask", "fastapi", "pandas", "numpy", "matplotlib", "requests",
     "beautifulsoup", "selenium", "scikit-learn", "tensorflow", "pytorch",
     # Query and data stores
-    "nosql",
+    "nosql", "mongo", "mongodb",
 ]
 
 CONCEPT_KEYWORDS = [
@@ -72,6 +74,12 @@ def detect_language(text):
     if not text:
         return None
     lowered = text.lower()
+    explicit = re.search(r"(?:programming language|language of)\s+([a-z0-9_#+]+)", lowered)
+    if explicit:
+        name = explicit.group(1).strip()
+        matched = normalize_language(name)
+        if matched in {normalize_language(l) for l in LANGUAGES}:
+            return matched
     for lang in sorted(LANGUAGES, key=len, reverse=True):
         if re.search(_lang_pattern(lang), lowered):
             return normalize_language(lang)

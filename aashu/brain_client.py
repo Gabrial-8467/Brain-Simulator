@@ -228,11 +228,65 @@ class BrainClient:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
+    def build_angularapp(self, name="My App", app_name="app", features=None, pages=None):
+        try:
+            r = requests.post(f"{self.base_url}/brain/build_angularapp", json={
+                "name": name, "app_name": app_name, "features": features, "pages": pages,
+            }, timeout=10.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def build_vueapp(self, name="My App", app_name="app", features=None, pages=None):
+        try:
+            r = requests.post(f"{self.base_url}/brain/build_vueapp", json={
+                "name": name, "app_name": app_name, "features": features, "pages": pages,
+            }, timeout=10.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def build_node_server(self, name="My Server", app_name="server", endpoints=None):
+        try:
+            r = requests.post(f"{self.base_url}/brain/build_node_server", json={
+                "name": name, "app_name": app_name, "endpoints": endpoints,
+            }, timeout=10.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def build_sql_schema(self, name="app", entities=None):
+        try:
+            r = requests.post(f"{self.base_url}/brain/build_sql_schema", json={
+                "name": name, "entities": entities,
+            }, timeout=10.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def build_fullstack(self, name="My App", kind="food_delivery", theme="light"):
+        try:
+            r = requests.post(f"{self.base_url}/brain/build_fullstack", json={
+                "name": name, "kind": kind, "theme": theme,
+            }, timeout=10.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
     def build_cli(self, name="tool", task=None, args=None):
         try:
             r = requests.post(f"{self.base_url}/brain/build_cli", json={
                 "name": name, "task": task, "args": args,
             }, timeout=10.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def debug_app(self, name="", fix=False):
+        try:
+            r = requests.post(f"{self.base_url}/brain/debug_app", json={
+                "name": name, "fix": fix,
+            }, timeout=30.0)
             return r.json()
         except Exception as e:
             return {"status": "error", "message": str(e)}

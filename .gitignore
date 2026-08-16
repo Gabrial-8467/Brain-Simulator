@@ -149,6 +149,9 @@ dev/
 experimental/
 sandbox/
 
+# Brain-generated applications (deterministic demo/test output)
+generated_apps/
+
 # Generated documentation
 generated_docs/
 auto_generated/

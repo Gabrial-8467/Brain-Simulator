@@ -12,6 +12,7 @@ import threading
 import json
 import smtplib
 import random
+import shutil
 from email.mime.text import MIMEText
 import cv2
 from PIL import ImageGrab
@@ -931,6 +932,122 @@ class AashuActuators:
                 ]
             },
             {
+                "name": "build_angularapp",
+                "description": "Build a full Angular web application with pages and features",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Project name for the Angular app"},
+                        "app_name": {"type": "string", "description": "App title"},
+                        "features": {"type": "string", "description": "Semicolon-separated feature list, e.g. 'auth;dashboard'"},
+                        "pages": {"type": "string", "description": "Semicolon-separated page list, e.g. 'Home;Settings'"}
+                    },
+                    "required": ["name"]
+                },
+                "patterns": [
+                    r"build (?:a |an )?angular ?app (?:called|for|named) ([\w\s]+)",
+                    r"make (?:a |an )?angular ?app (?:called|for) ([\w\s]+)"
+                ]
+            },
+            {
+                "name": "build_vueapp",
+                "description": "Build a full Vue web application with pages and features",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Project name for the Vue app"},
+                        "app_name": {"type": "string", "description": "App title"},
+                        "features": {"type": "string", "description": "Semicolon-separated feature list, e.g. 'auth;dashboard'"},
+                        "pages": {"type": "string", "description": "Semicolon-separated page list, e.g. 'Home;Settings'"}
+                    },
+                    "required": ["name"]
+                },
+                "patterns": [
+                    r"build (?:a |an )?vue ?app (?:called|for|named) ([\w\s]+)",
+                    r"build (?:a |an )?app with vue (?:called|for|named) ([\w\s]+)",
+                    r"make (?:a |an )?vue ?app (?:called|for) ([\w\s]+)"
+                ]
+            },
+            {
+                "name": "build_node_server",
+                "description": "Build a Node/Express API server with endpoints",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Project name for the server"},
+                        "app_name": {"type": "string", "description": "Server module name"},
+                        "endpoints": {"type": "string", "description": "Semicolon-separated endpoint paths, e.g. '/; /health; /api/users'"}
+                    },
+                    "required": ["name"]
+                },
+                "patterns": [
+                    r"build (?:a |an )?(?:node|express) ?server (?:called|for|named) ([\w\s]+)",
+                    r"build (?:a |an )?api server (?:called|for|named) ([\w\s]+)",
+                    r"make (?:a |an )?(?:node|express) ?server (?:called|for) ([\w\s]+)"
+                ]
+            },
+            {
+                "name": "build_sql_schema",
+                "description": "Build a SQL database schema with tables for given entities",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Database name"},
+                        "entities": {"type": "string", "description": "Semicolon-separated table names, e.g. 'users;orders;products'"}
+                    },
+                    "required": ["name"]
+                },
+                "patterns": [
+                    r"build (?:a |an )?sql schema (?:for|called|named) ([\w\s]+)",
+                    r"create (?:a |an )?database schema (?:for|called) ([\w\s]+)",
+                    r"make (?:a |an )?sql (?:database|schema) (?:for|called) ([\w\s]+)"
+                ]
+            },
+            {
+                "name": "build_fullstack",
+                "description": "Build a complete vertical full-stack app (backend + database schema + frontend wired together). Kinds: food_delivery (like Zomato), ecommerce, booking, task_tracker, chat, blog, notes, fitness",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Project name (optional, defaults per kind)"},
+                        "kind": {"type": "string", "description": "App kind: food_delivery, ecommerce, booking, task_tracker, chat, blog, notes, or fitness"},
+                        "theme": {"type": "string", "description": "light or dark"}
+                    },
+                    "required": []
+                },
+                "patterns": [
+                    r"build (?:a |an )?(?:full[- ]?stack )?app (?:called|for|named|like) (?P<name>[\w\s\-]+)",
+                    r"make (?:a |an )?(?:full[- ]?stack )?app (?:called|for|like) (?P<name>[\w\s\-]+)",
+                    r"build (?:a |an )?(?P<kind>food delivery) app(?: (?:called|for|named|like) (?P<name>[\w\s\-]+))?",
+                    r"build (?:a |an )?(?P<kind>ecommerce|shop|shopping) app(?: (?:called|for|named|like) (?P<name>[\w\s\-]+))?",
+                    r"build (?:a |an )?(?P<kind>booking|reservation|appointment) app(?: (?:called|for|named|like) (?P<name>[\w\s\-]+))?",
+                    r"build (?:a |an )?(?P<kind>task tracker|todo) app(?: (?:called|for|named|like) (?P<name>[\w\s\-]+))?",
+                    r"build (?:a |an )?(?P<kind>chat|messaging) app(?: (?:called|for|named|like) (?P<name>[\w\s\-]+))?",
+                    r"build (?:a |an )?(?P<kind>blog|cms) app(?: (?:called|for|named|like) (?P<name>[\w\s\-]+))?",
+                    r"build (?:a |an )?(?P<kind>notes|note) app(?: (?:called|for|named|like) (?P<name>[\w\s\-]+))?",
+                    r"build (?:a |an )?(?P<kind>fitness|workout|health) tracker(?: (?:called|for|named|like) (?P<name>[\w\s\-]+))?",
+                    r"create (?:a |an )?app like (?P<name>[\w\s\-]+)"
+                ]
+            },
+            {
+                "name": "debug_app",
+                "description": "Deterministically hunt for bugs in a generated app (missing tables, syntax errors, broken routes, template tokens) and optionally fix them in place",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Name of the generated app to debug"},
+                        "fix": {"type": "boolean", "description": "Also repair the bugs that can be fixed safely"}
+                    },
+                    "required": ["name"]
+                },
+                "patterns": [
+                    r"debug (?:the |this )?(?:app )?(?P<name>[\w\s\-]+)",
+                    r"find bugs? in (?:the )?(?P<name>[\w\s\-]+)",
+                    r"check (?:the )?(?P<name>[\w\s\-]+) app for bugs",
+                    r"fix (?:the )?bugs? in (?:the )?(?P<name>[\w\s\-]+)"
+                ]
+            },
+            {
                 "name": "build_cli",
                 "description": "Build a command-line tool (Python) for a given task",
                 "parameters": {
@@ -1067,6 +1184,18 @@ class AashuActuators:
             return self._build_webapp(args.get("name", ""), args.get("app_name"), args.get("features"), args.get("pages"))
         elif name == "build_reactapp":
             return self._build_reactapp(args.get("name", ""), args.get("app_name"), args.get("features"), args.get("pages"))
+        elif name == "build_angularapp":
+            return self._build_angularapp(args.get("name", ""), args.get("app_name"), args.get("features"), args.get("pages"))
+        elif name == "build_vueapp":
+            return self._build_vueapp(args.get("name", ""), args.get("app_name"), args.get("features"), args.get("pages"))
+        elif name == "build_node_server":
+            return self._build_node_server(args.get("name", ""), args.get("app_name"), args.get("endpoints"))
+        elif name == "build_sql_schema":
+            return self._build_sql_schema(args.get("name", ""), args.get("entities"))
+        elif name == "build_fullstack":
+            return self._build_fullstack(args.get("name", ""), args.get("kind", "food_delivery"), args.get("theme", "light"))
+        elif name == "debug_app":
+            return self._debug_app(args.get("name", ""), args.get("fix", False))
         elif name == "build_cli":
             return self._build_cli(args.get("name", ""), args.get("task"), args.get("args"))
         return f"Error: Tool '{name}' is not registered."
@@ -1424,6 +1553,25 @@ class AashuActuators:
                 f.write(code)
             
             res = subprocess.run([sys.executable, path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5.0)
+            if res.returncode == 0:
+                return f"Sandbox Output: {res.stdout.strip()}"
+            else:
+                return f"Sandbox Runtime Error:\n{res.stderr.strip()}"
+        except subprocess.TimeoutExpired:
+            return "Sandbox Error: Execution timed out."
+        except Exception as e:
+            return f"Sandbox Script Error: {e}"
+
+    def _run_node_js(self, code):
+        try:
+            os.makedirs("sandbox", exist_ok=True)
+            path = os.path.abspath("sandbox/sandbox_temp.js")
+            with open(path, "w") as f:
+                f.write(code)
+            node = shutil.which("node")
+            if not node:
+                return "Sandbox Note: Node.js is not installed, skipping execution."
+            res = subprocess.run([node, path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5.0)
             if res.returncode == 0:
                 return f"Sandbox Output: {res.stdout.strip()}"
             else:
@@ -2018,10 +2166,13 @@ class AashuActuators:
 
         write_result = self._create_file(filename, code)
 
-        # Validate by executing in the sandbox (Python-family only)
+        # Validate by executing in the sandbox (Python/JS family only)
         test_result = ""
         if lang in ("python", "py"):
             test_result = self._run_script(code)
+            success = "Sandbox Output" in test_result and "Error" not in test_result
+        elif lang in ("javascript", "nodejs"):
+            test_result = self._run_node_js(code)
             success = "Sandbox Output" in test_result and "Error" not in test_result
         else:
             success = "successfully created" in write_result
@@ -2129,6 +2280,78 @@ class AashuActuators:
             return res.get("message", "React app built.")
         return res.get("message", "Error: Could not build React app.")
 
+    def _build_angularapp(self, name, app_name=None, features=None, pages=None):
+        if not (name or "").strip():
+            return "Error: No Angular app name provided."
+        if self.brain_client is None:
+            return "Error: Brain offline, cannot build Angular apps. Start the brain server first."
+        res = self.brain_client.build_angularapp(name=name, app_name=app_name, features=features, pages=pages)
+        if res.get("status") == "success":
+            return res.get("message", "Angular app built.")
+        return res.get("message", "Error: Could not build Angular app.")
+
+    def _build_vueapp(self, name, app_name=None, features=None, pages=None):
+        if not (name or "").strip():
+            return "Error: No Vue app name provided."
+        if self.brain_client is None:
+            return "Error: Brain offline, cannot build Vue apps. Start the brain server first."
+        res = self.brain_client.build_vueapp(name=name, app_name=app_name, features=features, pages=pages)
+        if res.get("status") == "success":
+            return res.get("message", "Vue app built.")
+        return res.get("message", "Error: Could not build Vue app.")
+
+    def _build_node_server(self, name, app_name=None, endpoints=None):
+        if not (name or "").strip():
+            return "Error: No server name provided."
+        if self.brain_client is None:
+            return "Error: Brain offline, cannot build servers. Start the brain server first."
+        res = self.brain_client.build_node_server(name=name, app_name=app_name, endpoints=endpoints)
+        if res.get("status") == "success":
+            return res.get("message", "Server built.")
+        return res.get("message", "Error: Could not build server.")
+
+    def _build_sql_schema(self, name, entities=None):
+        if not (name or "").strip():
+            return "Error: No database name provided."
+        if self.brain_client is None:
+            return "Error: Brain offline, cannot build SQL schemas. Start the brain server first."
+        res = self.brain_client.build_sql_schema(name=name, entities=entities)
+        if res.get("status") == "success":
+            return res.get("message", "SQL schema built.")
+        return res.get("message", "Error: Could not build SQL schema.")
+
+    def _build_fullstack(self, name, kind="food_delivery", theme="light"):
+        from cognition.app_builder import _KIND_ALIASES, _normalize_kind
+        kind = (kind or "").strip()
+        kind_key = _normalize_kind(kind)
+        if kind_key is None:
+            lowered = kind.lower()
+            for key, target in _KIND_ALIASES.items():
+                if key in lowered:
+                    kind_key = target
+                    break
+        if kind_key is None:
+            kind_key = "food_delivery"
+        kind = kind_key
+        defaults = {
+            "food_delivery": "Zomato",
+            "ecommerce": "Shop",
+            "booking": "Bookings",
+            "task_tracker": "Tasks",
+            "chat": "Chatter",
+            "blog": "MyBlog",
+            "notes": "Notes",
+            "fitness": "FitLog",
+        }
+        if not (name or "").strip():
+            name = defaults.get(kind, "MyApp")
+        if self.brain_client is None:
+            return "Error: Brain offline, cannot build full-stack apps. Start the brain server first."
+        res = self.brain_client.build_fullstack(name=name, kind=kind, theme=theme)
+        if res.get("status") == "success":
+            return res.get("message", "Full-stack app built.")
+        return res.get("message", "Error: Could not build full-stack app.")
+
     def _build_cli(self, name, task=None, args=None):
         if not (name or "").strip():
             return "Error: No tool name provided."
@@ -2140,4 +2363,27 @@ class AashuActuators:
         if res.get("status") == "success":
             return res.get("message", "CLI tool built.")
         return res.get("message", "Error: Could not build CLI tool.")
+
+    def _debug_app(self, name="", fix=False):
+        name = (name or "").strip()
+        if not name:
+            return "Error: No app name given to debug."
+        if self.mouth:
+            self.mouth.speak(f"Debugging the {name} app.")
+        if self.brain_client is None:
+            return "Error: Brain offline, cannot debug apps. Start the brain server first."
+        res = self.brain_client.debug_app(name=name, fix=bool(fix))
+        report = res.get("report") or {}
+        bugs = report.get("bugs") or []
+        fixed = report.get("fixed") or []
+        lines = []
+        lines.append(f"Debug report for '{name}' ({len(bugs)} bug(s) found, {len(fixed)} fixed):")
+        for b in bugs:
+            lines.append(f"  - [{b['severity']}] {b['location']}: {b['message']}")
+        for f in fixed:
+            lines.append(f"  + fixed: {f}")
+        if not bugs and not fixed:
+            lines.append("  App looks clean: schema, routes, syntax and bootstrap all consistent.")
+        lines.append("Status: " + ("OK" if report.get("ok", False) else "bugs remain (see report)."))
+        return "\n".join(lines)
 

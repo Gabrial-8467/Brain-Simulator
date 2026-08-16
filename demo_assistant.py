@@ -14,6 +14,8 @@ Runs fully offline / in-process (no camera, no Ollama, no network needed).
 import os
 import sys
 import tempfile
+from pathlib import Path
+
 import yaml
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -90,6 +92,26 @@ class InProcessBrainClient:
 
     def build_reactapp(self, name="My App", app_name="app", features=None, pages=None):
         ok, result = self.brain.build_reactapp(name=name, app_name=app_name, features=features, pages=pages)
+        return {"status": "success" if ok else "not_learned", "message": result}
+
+    def build_angularapp(self, name="My App", app_name="app", features=None, pages=None):
+        ok, result = self.brain.build_angularapp(name=name, app_name=app_name, features=features, pages=pages)
+        return {"status": "success" if ok else "not_learned", "message": result}
+
+    def build_vueapp(self, name="My App", app_name="app", features=None, pages=None):
+        ok, result = self.brain.build_vueapp(name=name, app_name=app_name, features=features, pages=pages)
+        return {"status": "success" if ok else "not_learned", "message": result}
+
+    def build_node_server(self, name="My Server", app_name="server", endpoints=None):
+        ok, result = self.brain.build_node_server(name=name, app_name=app_name, endpoints=endpoints)
+        return {"status": "success" if ok else "not_learned", "message": result}
+
+    def build_sql_schema(self, name="app", entities=None):
+        ok, result = self.brain.build_sql_schema(name=name, entities=entities)
+        return {"status": "success" if ok else "not_learned", "message": result}
+
+    def build_fullstack(self, name="My App", kind="food_delivery", theme="light"):
+        ok, result = self.brain.build_fullstack(name=name, kind=kind, theme=theme)
         return {"status": "success" if ok else "not_learned", "message": result}
 
     def build_cli(self, name="tool", task=None, args=None):
@@ -298,6 +320,63 @@ def main():
         print(f"  - {p['name']}: {', '.join(p['files'])}")
 
     # ---------------------------------------------------------------
+    section("6b. MORE GENERATORS + FULL-STACK VERTICAL APPS")
+    print("Aashu learns the remaining web languages from the internet:")
+    for name, snippet in [
+        ("angular", "Learn the programming language angular. Angular apps use components with @Component decorators, "
+                    "bootstrapApplication mounts the root component, and index.html hosts <app-root>."),
+        ("vuejs", "Learn the programming language vuejs. Vue uses single-file components with <template>, <script setup> "
+                  "and ref() for reactive state, mounted with createApp(App).mount('#app')."),
+        ("nodejs", "Learn the programming language nodejs. Node uses require('express'), app.get('/path', handler) "
+                   "routes and app.listen(port)."),
+        ("sql", "Learn the programming language sql. SQL defines relational databases: CREATE TABLE IF NOT EXISTS, "
+                "SERIAL PRIMARY KEY ids, VARCHAR columns, and TIMESTAMP DEFAULT CURRENT_TIMESTAMP."),
+    ]:
+        brain.perceive({
+            "content": snippet,
+            "category": "learning",
+            "modality": "experience",
+            "valence": 0.4,
+            "intensity": 0.6,
+            "source": "internet",
+        })
+    print(f"  known languages: {brain.language_cortex.known_languages()}")
+
+    for name, kind in [("HireMe", "angular"), ("Bloggy", "vuejs"), ("Billing", "nodejs"), ("ZomatoClone", "food_delivery"),
+                       ("ShopNow", "ecommerce"), ("BookIt", "booking"), ("TodoPro", "task_tracker"),
+                       ("Chatter", "chat"), ("DevBlog", "blog"), ("QuickNotes", "notes"), ("FitLog", "fitness")]:
+        builder = {"angular": brain.build_angularapp, "vuejs": brain.build_vueapp,
+                   "nodejs": brain.build_node_server, "food_delivery": brain.build_fullstack,
+                   "ecommerce": brain.build_fullstack, "booking": brain.build_fullstack,
+                   "task_tracker": brain.build_fullstack, "chat": brain.build_fullstack,
+                   "blog": brain.build_fullstack, "notes": brain.build_fullstack,
+                   "fitness": brain.build_fullstack}[kind]
+        fullstack_kinds = {"food_delivery", "ecommerce", "booking", "task_tracker", "chat", "blog", "notes", "fitness"}
+        ok, msg = builder(name, kind=kind) if kind in fullstack_kinds else builder(name)
+        print(f"\nbuild_{'fullstack' if kind in fullstack_kinds else kind}({name!r}) ->\n  {msg}")
+
+    ok, msg = brain.build_sql_schema("orders", entities="users;orders;products")
+    print(f"\nbuild_sql_schema('orders') ->\n  {msg}")
+    print("\nAppBuilder project list:")
+    for p in brain.app_builder.list_projects():
+        print(f"  - {p['name']}: {', '.join(p['files'])}")
+
+    section("6c. DEBUGGING GENERATED APPS  (deterministic, no LLM)")
+    debug_name = "BookIt"
+    dbg_root = Path(brain.app_builder._project_path(debug_name))
+    for rel in ["backend/schema.sql", "backend/app.py"]:
+        p = dbg_root / rel
+        p.write_text(p.read_text().replace("CREATE TABLE IF NOT EXISTS orders", "CREATE TABLE IF NOT EXISTS bookings"))
+    rep = brain.debug_app(debug_name)
+    print(f"\ndebug_app({debug_name!r}) -> {rep['bug_count']} issue(s):")
+    for b in rep["bugs"]:
+        print(f"  [{b['severity']}] {b['location']}: {b['message']}")
+    rep = brain.debug_app(debug_name, fix=True)
+    print(f"\ndebug_app({debug_name!r}, fix=True) -> fixed={rep['fixed']}, remaining bugs={rep['bug_count']}")
+    assert not rep["bugs"]
+    assert "CREATE TABLE IF NOT EXISTS orders" in (dbg_root / "backend/schema.sql").read_text()
+
+    # ---------------------------------------------------------------
     section("7. MEMORY CONSOLIDATION  (traits + forgetting curve)")
     print("Adding several short preference facts:")
     for fact in ["I like tea", "I prefer tea", "I drink tea daily"]:
@@ -319,6 +398,9 @@ def main():
         "build a website called Portfolio",
         "build a web app called TaskBoard",
         "build a react app called Dashboard",
+        "build a food delivery app like zomato",
+        "build a task tracker app called TodoPro",
+        "build a node server called Billing",
         "remind me in 5 minutes",
     ]:
         match = brain.resolve_tool(query)
@@ -332,6 +414,10 @@ def main():
     planner2 = PlanExecutor(actuators, brain_client=client)
     report3 = planner2.execute("build a website called Portfolio")
     print(planner2.format_report(report3))
+
+    print("\nPlanner 'make an ecommerce app like amazon':")
+    report4 = planner2.execute("make an ecommerce app like amazon")
+    print(planner2.format_report(report4))
 
     # ---------------------------------------------------------------
     section("SUMMARY")

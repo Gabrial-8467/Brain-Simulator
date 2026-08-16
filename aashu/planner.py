@@ -64,8 +64,35 @@ class PlanExecutor:
             topic = re.sub(r".*learn\s+", "", goal).strip()
             return [{"name": "learn_topic", "arguments": {"topic": topic}, "description": f"Learn about {topic} from the internet"}]
 
+        # ---- Debug / repair generated apps ----
+        m = re.search(r"(?:debug|find bugs in|check .* for bugs|fix .*bugs in)\s+(?:the |this )?(?:app )?(?:called |named )?([\w\s\-]+)", goal, re.IGNORECASE)
+        if m and re.search(r"debug|bugs|fix", goal, re.IGNORECASE):
+            app_name = re.sub(r"\s+(?:app|application)$", "", m.group(1).strip(), flags=re.IGNORECASE)
+            wants_fix = bool(re.search(r"fix|repair|solve", goal, re.IGNORECASE))
+            return [{"name": "debug_app",
+                     "arguments": {"name": app_name, "fix": wants_fix},
+                     "description": f"{'Fix' if wants_fix else 'Debug'} the {app_name} app"}]
+
+        # ---- Vertical full-stack apps (food delivery, ecommerce, tracker, chat, ...) ----
+        fullstack_kinds = {
+            "food_delivery": ["food delivery", "zomato", "swiggy", "restaurant ordering", "delivery app", "like zomato"],
+            "ecommerce": ["ecommerce", "e-commerce", "online store", "shop app", "shopping app"],
+            "booking": ["booking app", "reservation app", "appointment app", "bookings"],
+            "task_tracker": ["task tracker", "task app", "todo app", "to-do app"],
+            "chat": ["chat app", "messaging app", "chatroom"],
+            "blog": ["blog app", "blog", "cms", "articles app"],
+            "notes": ["notes app", "note taking app", "notebook app"],
+            "fitness": ["fitness tracker", "workout tracker", "health tracker", "workout app"],
+        }
+        for kind, keys in fullstack_kinds.items():
+            if any(k in goal for k in keys):
+                m = re.search(r"(?:like|called|for|named)\s+(?:a\s+)?([\w\s\-]+)", goal, re.IGNORECASE)
+                full_name = m.group(1).strip() if m else "myapp"
+                return [{"name": "build_fullstack", "arguments": {"name": full_name, "kind": kind, "theme": "light"},
+                         "description": f"Build a {kind} full-stack app named {full_name}"}]
+
         # ---- App / website / CLI generation ----
-        m = re.search(r"build\s+(?:a|an)?\s*(react ?app|website|c#|web ?app|webapp|cli|tool|app)\s+(?:called|for|named)?\s*([\w\s\-]+)", goal, re.IGNORECASE)
+        m = re.search(r"build\s+(?:a|an)?\s*(react ?app|angular ?app|vue ?app|node ?server|express ?server|api ?server|sql schema|sql database|website|c#|web ?app|webapp|cli|tool|app)\s+(?:called|for|named)?\s*([\w\s\-]+)", goal, re.IGNORECASE)
         kind = m.group(1).lower().replace(" ", "") if m else None
         target = m.group(2).strip() if m and m.group(2) else goal
         if kind in ("website",):
@@ -74,6 +101,14 @@ class PlanExecutor:
             return [{"name": "build_webapp", "arguments": {"name": target, "app_name": "app", "features": "Home", "pages": "Home;About"}, "description": f"Build web app for {target}"}]
         if kind in ("reactapp",):
             return [{"name": "build_reactapp", "arguments": {"name": target, "app_name": "app", "features": "Home", "pages": "Home;About"}, "description": f"Build React app for {target}"}]
+        if kind in ("angularapp",):
+            return [{"name": "build_angularapp", "arguments": {"name": target, "app_name": "app", "features": "Home", "pages": "Home;About"}, "description": f"Build Angular app for {target}"}]
+        if kind in ("vueapp",):
+            return [{"name": "build_vueapp", "arguments": {"name": target, "app_name": "app", "features": "Home", "pages": "Home;About"}, "description": f"Build Vue app for {target}"}]
+        if kind in ("nodeserver", "expressserver", "apiserver"):
+            return [{"name": "build_node_server", "arguments": {"name": target, "app_name": "server", "endpoints": "/;/health"}, "description": f"Build Node/Express server for {target}"}]
+        if kind in ("sqlschema", "sqldatabase"):
+            return [{"name": "build_sql_schema", "arguments": {"name": target, "entities": "users;orders"}, "description": f"Build SQL schema for {target}"}]
         if kind in ("cli", "tool", "app"):
             return [{"name": "build_cli", "arguments": {"name": target, "task": target, "args": ""}, "description": f"Build CLI tool for {target}"}]
 

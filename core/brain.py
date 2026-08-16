@@ -2178,6 +2178,32 @@ class VirtualBrain:
         """Brain-owned React web app generator (gated on learned reactjs)."""
         return self.app_builder.build_reactapp(name=name, app_name=app_name, features=features, pages=pages)
 
+    def build_angularapp(self, name="My App", app_name="app", features=None, pages=None):
+        """Brain-owned Angular web app generator (gated on learned angular)."""
+        return self.app_builder.build_angularapp(name=name, app_name=app_name, features=features, pages=pages)
+
+    def build_vueapp(self, name="My App", app_name="app", features=None, pages=None):
+        """Brain-owned Vue web app generator (gated on learned vuejs)."""
+        return self.app_builder.build_vueapp(name=name, app_name=app_name, features=features, pages=pages)
+
+    def build_node_server(self, name="My Server", app_name="server", endpoints=None):
+        """Brain-owned Node/Express server generator (gated on learned nodejs)."""
+        return self.app_builder.build_node_server(name=name, app_name=app_name, endpoints=endpoints)
+
+    def build_sql_schema(self, name="app", entities=None):
+        """Brain-owned SQL schema generator (gated on learned sql)."""
+        return self.app_builder.build_sql_schema(name=name, entities=entities)
+
+    def build_fullstack(self, name="My App", kind="food_delivery", theme="light"):
+        """Brain-owned vertical full-stack app generator (gated on learned python).
+
+        Kinds: food_delivery, ecommerce, task_tracker, chat."""
+        return self.app_builder.build_fullstack(name=name, kind=kind, theme=theme)
+
+    def debug_app(self, name="", fix=False):
+        """Brain-owned deterministic app debugger: static checks + safe repair."""
+        return self.app_builder.debug_app(name=name, fix=bool(fix))
+
     def build_cli(self, name="tool", task=None, args=None):
         """Brain-owned CLI tool generator (gated on learned python)."""
         return self.app_builder.build_cli(name=name, task=task or "print a friendly message", args=args)

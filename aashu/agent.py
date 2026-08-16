@@ -326,6 +326,21 @@ Your response must be short, helpful, and strictly align with your current emoti
             # 4b. Remember this exchange in conversation history
             history.add_turn(query, regulated_response)
 
+            # 4c. Feed a compact echo of the exchange into the brain's
+            #     episodic memory so later reflections recall it.
+            try:
+                echo = f"I talked with the user: they said '{query[:120]}' and I responded '{regulated_response[:120]}'."
+                brain.send_perception_raw({
+                    "content": echo,
+                    "category": "conversation",
+                    "modality": "experience",
+                    "valence": 0.1,
+                    "intensity": 0.3,
+                    "source": "agent",
+                })
+            except Exception:
+                pass
+
             # 5. Speak the response out loud
             mouth.speak(regulated_response)
 
