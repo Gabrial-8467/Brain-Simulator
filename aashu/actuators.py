@@ -28,6 +28,7 @@ class AashuActuators:
         self.music_process = None
         self.ollama = OllamaClient()
         self.alarm_time = None
+        self.learning = None
         
         self._init_db()
         self._init_calendar()
@@ -767,6 +768,70 @@ class AashuActuators:
                     r"hard reset brain",
                     r"soft reset brain"
                 ]
+            },
+            {
+                "name": "learn_topic",
+                "description": "Learn about a topic from internet resources and store it in Aashu's knowledge (supports programming languages, science, anything)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "topic": {"type": "string", "description": "Topic or learning query, e.g. 'python functions' or 'neural networks'"}
+                    },
+                    "required": ["topic"]
+                },
+                "patterns": [
+                    r"learn (about|topic) ([\w\s\-\.\?]+)",
+                    r"study ([\w\s\-\.\?]+)",
+                    r"learn programming ([\w\s\-\.\?]+)"
+                ]
+            },
+            {
+                "name": "write_code",
+                "description": "Write code for a task using what Aashu has learned, save it to a file, and test it",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "task": {"type": "string", "description": "The coding task to implement"},
+                        "language": {"type": "string", "description": "Programming language, e.g. python, javascript, c++"},
+                        "filename": {"type": "string", "description": "Optional output filename (e.g. my_script.py)"}
+                    },
+                    "required": ["task", "language"]
+                },
+                "patterns": [
+                    r"write ([\w]+) code (?:for|to) ([\w\s\-\.\?]+)",
+                    r"code (?:a|an)? ([\w\s\-\.\?]+) in ([\w]+)"
+                ]
+            },
+            {
+                "name": "recall_knowledge",
+                "description": "Recall what Aashu has learned about a topic and summarize it",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "topic": {"type": "string", "description": "Topic to recall knowledge about"}
+                    },
+                    "required": ["topic"]
+                },
+                "patterns": [
+                    r"what (?:have|did) you (?:learned|learn) (?:about|about topic) ([\w\s\-\.\?]+)",
+                    r"recall ([\w\s\-\.\?]+)",
+                    r"do you know ([\w\s\-\.\?]+)"
+                ]
+            },
+            {
+                "name": "what_do_i_know",
+                "description": "Report what knowledge Aashu has learned so far (topics and programming languages)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                },
+                "patterns": [
+                    r"what do you know",
+                    r"what have you learned",
+                    r"list your knowledge",
+                    r"show learned topics"
+                ]
             }
         ]
 
@@ -868,6 +933,14 @@ class AashuActuators:
             return self._wakeup_brain()
         elif name == "reset_brain_state":
             return self._reset_brain_state(args.get("hard", "false"))
+        elif name == "learn_topic":
+            return self._learn_topic(args.get("topic", ""))
+        elif name == "write_code":
+            return self._write_code(args.get("task", ""), args.get("language", "python"), args.get("filename", ""))
+        elif name == "recall_knowledge":
+            return self._recall_knowledge(args.get("topic", ""))
+        elif name == "what_do_i_know":
+            return self._what_do_i_know()
         return f"Error: Tool '{name}' is not registered."
 
     def _calculate(self, equation):
@@ -1737,4 +1810,84 @@ class AashuActuators:
             mode = "Hard (fresh state)" if is_hard else "Soft (focus/workspace cleared)"
             return f"Brain reset successfully completed in {mode} mode."
         return f"Error resetting brain: {res.get('message') if isinstance(res, dict) else 'Unknown error'}."
+
+    def _get_learning(self):
+        if self.learning is None:
+            from .learning import AashuLearning
+            self.learning = AashuLearning(brain_client=self.brain_client, ollama=self.ollama)
+        return self.learning
+
+    def _learn_topic(self, topic):
+        if not topic.strip():
+            return "Error: No topic provided to learn."
+        learning = self._get_learning()
+        item = learning.learn_from_internet(topic, search_fn=self._search_web, summary_fn=self._query_wikipedia)
+        if not item:
+            return "Error: Learning failed, no content retrieved."
+        lang = f" (language: {item.get('language')})" if item.get("language") else ""
+        self._send_notification("Aashu Learned Something", f"Learned about {item['topic']}{lang}")
+        if self.mouth:
+            self.mouth.speak(f"I learned about {item['topic']}.")
+        return f"Learned about '{item['topic']}' from the internet{lang}. Knowledge stored for later recall."
+
+    def _write_code(self, task, language, filename):
+        if not task.strip():
+            return "Error: No coding task provided."
+        learning = self._get_learning()
+        lang = (language or "python").strip().lower()
+        knowledge_context = learning.build_knowledge_context(f"{lang} {task}")
+
+        if self.mouth:
+            self.mouth.speak(f"Writing {lang} code for: {task}")
+
+        code = self.ollama.generate_code(task, lang, knowledge_context)
+
+        if not filename:
+            slug = re.sub(r"[^a-zA-Z0-9_]+", "_", task.strip().lower())[:30].strip("_")
+            ext = "js" if lang in ("javascript", "typescript", "node") else ("sh" if lang in ("bash", "shell") else "py")
+            filename = f"{slug or 'aashu_code'}.{ext}"
+
+        write_result = self._create_file(filename, code)
+
+        # Validate by executing in the sandbox (Python-family only)
+        test_result = ""
+        if lang in ("python", "py"):
+            test_result = self._run_script(code)
+            success = "Sandbox Output" in test_result and "Error" not in test_result
+        else:
+            success = "successfully created" in write_result
+
+        lesson = f"Wrote {lang} code for: {task}. Saved to {filename}. Sandbox result: {test_result or write_result}"
+        learning.learn(lesson, topic=f"{lang} code", source="self", language=lang,
+                       valence=0.45 if success else -0.2)
+
+        if success:
+            if self.mouth:
+                self.mouth.speak(f"Code written and tested for {task}.")
+            return f"Code generated and saved to '{filename}'. Test output: {test_result.strip()}"
+        return f"Code written to '{filename}' but the sandbox reported an issue: {test_result.strip()}"
+
+    def _recall_knowledge(self, topic):
+        if not topic.strip():
+            return "Error: No topic provided to recall."
+        learning = self._get_learning()
+        entries = learning.recall(topic)
+        if not entries:
+            return f"I have not learned anything about '{topic}' yet. Ask me to learn it from the internet."
+        lines = []
+        for e in entries[:5]:
+            lines.append(f"[{e.get('source', 'source')}] {e.get('content', '')}")
+        return "What I know:\n" + "\n".join(lines)
+
+    def _what_do_i_know(self):
+        learning = self._get_learning()
+        report = learning.knowledge_report()
+        if report["total_entries"] == 0:
+            return "I have not learned anything yet. Ask me to learn a topic from the internet, or I will learn from what I see and hear."
+        parts = [f"I currently know {report['total_entries']} things."]
+        if report["languages"]:
+            parts.append(f"Programming languages I know about: {', '.join(report['languages'])}.")
+        if report["topics"]:
+            parts.append(f"Topics: {', '.join(report['topics'][:15])}.")
+        return " ".join(parts)
 

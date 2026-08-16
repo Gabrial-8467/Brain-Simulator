@@ -116,6 +116,13 @@ def init_brain(deterministic: bool = False):
         logger.error(f"Failed to load decision config: {e}")
         sys.exit(1)
 
+    brain_config = {}
+    try:
+        with open("config/brain.yaml", "r") as f:
+            brain_config = yaml.safe_load(f) or {}
+    except Exception as e:
+        logger.warning(f"Failed to load brain config: {e}. Using defaults.")
+
     # 2. Memory
     memory_manager = MemoryManager(storage_path="memory_store.json")
     loaded_state = None
@@ -138,7 +145,8 @@ def init_brain(deterministic: bool = False):
         chemical_configs=chemical_configs["chemicals"],
         interaction_matrix=chemical_configs.get("interactions"),
         decision_engine=decision_engine,
-        deterministic=deterministic
+        deterministic=deterministic,
+        brain_config=brain_config,
     )
 
     if loaded_state:

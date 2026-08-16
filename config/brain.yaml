@@ -1,0 +1,211 @@
+# Brain simulation tuning parameters.
+#
+# This file is the runtime source of truth for the cognitive tuning constants
+# that used to be hardcoded in core/brain.py. Values here are merged over
+# DEFAULT_BRAIN_CONFIG in core/brain.py, which must stay byte-identical with
+# this file (guarded by tests/test_config_defaults_match.py).
+#
+# Scientific conventions: parameter sweeps and reproducibility experiments
+# should override values here (or pass a brain_config dict into
+# VirtualBrain(...)) without touching Python code.
+
+homeostasis:
+  target: 60.0
+  rate: 0.04
+  max_delta: 1.0
+  gentle_upward_max: 0.5
+  baselines:
+    dopamine: 65.0
+    cortisol: 45.0
+    oxytocin: 65.0
+    serotonin: 62.0
+  cortisol_decay_baseline: 45.0
+  cortisol_decay_rate: 0.04
+  serotonin_regulation_baseline: 60.0
+  oxytocin_floor: 62.0
+  oxytocin_floor_pull: 0.04
+  serotonin_pull_rate: 0.02
+  oxytocin_decay_multipliers:
+    high_social_value: 0.8
+    mid_social_value: 0.6
+    high_multiplier: 0.4
+    mid_multiplier: 0.7
+
+decision_feedback:
+  scale: 0.45
+  max_delta: 3.0
+  cortisol_max_delta: 0.6
+
+risk:
+  initial: 0.5
+  adapt_rate: 0.02
+  wisdom_gain: 0.003
+  min: 0.1
+  max: 0.9
+
+fatigue:
+  recovery_rate: 0.98
+  reflection_depth_threshold: 50.0
+  reflection_depth_cost: 0.01
+
+reflection:
+  decay_rate: 0.995
+  interval: 50
+  max_influence: 0.05
+  consciousness_boost: 0.04
+  consciousness_boost_max: 0.25
+  wisdom_gain: 0.05
+  reflection_depth_gain: 0.5
+  recent_window: 50
+
+stress:
+  threshold: 50.0
+  burnout_threshold: 75.0
+  low_serotonin_level: 55.0
+  high_stress_level: 60.0
+  chronic_stress_level: 58.0
+
+social:
+  decay_rate: 0.001
+  decay_floor: 0.0002
+  gain_hold_steps: 8
+  event_impacts:
+    ignored: 0.01
+    loneliness: 0.015
+    greeted: 0.02
+    praise: 0.015
+    face_recognized: 0.01
+
+resilience:
+  growth_rate: 0.01
+  damage_rate: 0.02
+  emotional_dip_dopamine: 56.0
+  emotional_dip_serotonin: 56.0
+  chronic_stress_steps: 5
+  stress_load_cortisol: 55.0
+  stress_load_divisor: 25.0
+  stress_loss_base: 0.003
+  stress_loss_divisor: 2.5
+  recovery_cortisol: 54.0
+  recovery_dopamine: 57.0
+  recovery_serotonin: 58.0
+  recovery_strength_base: 0.004
+  recovery_serotonin_divisor: 20.0
+  soft_headroom_max: 2.5
+  hardening_base: 0.0015
+  hardening_min_intensity: 0.2
+  survival_cortisol: 45.0
+  survival_divisor: 70.0
+  comfort_steps: 12
+  comfort_cortisol: 50.0
+  complacency_base: 0.0008
+
+development:
+  stage_learning_multipliers:
+    child: 1.0
+    teen: 1.25
+    adult: 1.5
+  concept_stage_rate:
+    child: 0.07
+    teen: 0.09
+    adult: 0.11
+  concept_confidence_default: 0.5
+  concept_salience_default: 0.3
+  concept_learning_base: 0.6
+  concept_confidence_weight: 0.4
+  concept_salience_weight: 0.4
+  concept_relations_max: 20
+  stage_boundaries:
+    teen_maturity: 0.45
+    teen_experience: 3.0
+    adult_maturity: 0.78
+    adult_experience: 8.0
+  maturity_target_weights:
+    experience: 0.15
+    intelligence: 0.35
+    wisdom: 0.35
+  maturity_learning_rate: 0.05
+  maturity_reflection_depth_coefficient: 0.0004
+  stress_factor_cortisol: 50.0
+  stress_factor_divisor: 100.0
+
+growth:
+  volatility_coefficient: 0.0008
+  regret_coefficient: 0.008
+  stress_recovery_bonus: 0.02
+  stability_coefficient: 0.01
+  reflection_depth_coefficient: 0.0003
+  wisdom_regret_coefficient: 0.003
+  wisdom_recovery_bonus: 0.01
+  wisdom_resilience_threshold: 0.6
+  wisdom_resilience_gain: 0.002
+  novelty_factor_divisor: 0.1
+
+narrative:
+  update_interval: 25
+  update_recent_events: 100
+  identity_bias_scale: 0.1
+
+recall:
+  max_delta: 2.0
+  responses:
+    positive:
+      dopamine: 1.2
+      cortisol: -0.3
+      oxytocin: 0.4
+      serotonin: 0.3
+    threat:
+      dopamine: -0.3
+      cortisol: 1.5
+      oxytocin: -0.5
+      serotonin: -0.4
+    failure:
+      dopamine: -0.5
+      cortisol: 0.8
+      oxytocin: 0.0
+      serotonin: -0.6
+    social_pain:
+      dopamine: -0.4
+      cortisol: 0.6
+      oxytocin: -1.2
+      serotonin: -0.5
+    neutral:
+      dopamine: 0.2
+      cortisol: 0.0
+      oxytocin: 0.0
+      serotonin: 0.0
+
+acetylcholine:
+  streak_scale: 3.5
+  learning_rate_base: 0.05
+  learning_rate_multiplier: 0.15
+
+norepinephrine:
+  novelty_scale: 15.0
+  cortisol_delta_scale: 0.25
+
+love:
+  attachment_threshold: 0.6
+  oxytocin_threshold: 60.0
+  dopamine_threshold: 60.0
+
+emotion:
+  focus_threshold: 0.7
+  high_emotion_hits: 3
+
+curiosity:
+  bonus_threshold: 0.6
+  dopamine_reward: 12.0
+
+reinforcement:
+  rpe_dopamine_scale: 5.0
+  rpe_dopamine_max_delta: 10.0
+  endorphin_regret_scale: 25.0
+  endorphin_cortisol_buffering: 0.15
+  endorphin_serotonin_boost: 0.1
+
+hopfield:
+  neurons: 9
+  binarize_threshold: 50.0
+  ach_scale_min: 0.3
+  ach_scale_max: 1.2

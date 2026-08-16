@@ -1,5 +1,25 @@
 # Enhanced Belief Extraction Layer and Worldview Engine
 
+> **Implementation Status (updated Aug 2026):**
+> The **pattern detection system (section 2)** is implemented and shipped as an
+> opt-in module: `cognition/pattern_detectors.py` (5 deterministic detectors) and
+> `cognition/enhanced_belief_engine.py` (`EnhancedBeliefEngine(BeliefEngine)`).
+> Enable it by passing `worldview_config={"engine": "enhanced"}` to `VirtualBrain`.
+> Base `BeliefEngine` behavior is unchanged and remains the default.
+>
+> **Deferred (not yet implemented, reference only):** Dynamic Resilience System (3),
+> Lingering Mood Model (4), Enhanced Narrative System (5), Strategy Adaptation Engine (6),
+> Enhanced Consciousness Calculator (7), and the full tick()-level integration in the
+> "Integration Points" section. Those components are documented here as the design target
+> for future work; they do **not** currently exist in the codebase.
+>
+> **Implemented integration surface:**
+> - `EnhancedBeliefEngine.extract_beliefs` augments base extraction with pattern-derived
+>   beliefs using the same confidence smoothing as the base engine.
+> - `get_pattern_report(limit)` returns recent detections.
+> - `to_state()` / `load_state()` persist the pattern log (JSON-serializable).
+> - Tests: `tests/test_pattern_detectors.py`, `tests/test_enhanced_belief.py`.
+
 ## Architecture Overview
 
 The enhanced system builds upon the existing BeliefEngine with these key improvements:

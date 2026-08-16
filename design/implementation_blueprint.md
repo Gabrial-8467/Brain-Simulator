@@ -1,5 +1,29 @@
 # Implementation Blueprint
 
+> **Implementation Status (updated Aug 2026):**
+> This document is the **reference design** for the cognitive architecture. Phase 1's
+> pattern-detection layer is implemented and shipped as an **opt-in** module; the
+> remaining phases (resilience/mood/strategy/consciousness engines) are **deferred**
+> and documented below for future work.
+>
+> | Component | Status | Where |
+> |---|---|---|
+> | Enhanced Belief Engine (pattern detection) | **Implemented** (opt-in) | `cognition/enhanced_belief_engine.py`, `cognition/pattern_detectors.py` |
+> | Opt-in wiring in `VirtualBrain` | **Implemented** | `core/brain.py` `__init__` (`worldview_config["engine"] == "enhanced"`) |
+> | Tests | **Implemented** | `tests/test_pattern_detectors.py`, `tests/test_enhanced_belief.py` |
+> | Dynamic Resilience Engine | Deferred | see Phase 1.3 below |
+> | Mood Engine | Deferred | see Phase 2.1 below |
+> | Strategy Adaptation | Deferred | see Phase 2.2 below |
+> | Enhanced Consciousness Calculator | Deferred | see Phase 2.3 below |
+> | Full tick()/decision-bias integration | Deferred | see Phase 3 below |
+>
+> **Note on implementation divergence:** the shipped `EnhancedBeliefEngine` keeps the
+> base `BeliefEngine` interface intact (opt-in via `engine: "enhanced"`) and augments it
+> with pattern detectors rather than replacing the pipeline. The `BeliefNetwork`
+> from the original spec was not implemented; coherence is still computed by the
+> base engine's `_belief_coherence`. Pattern detectors classify events by
+> `metadata.category` (not keyword matching) and are fully deterministic.
+
 ## Step-by-Step Implementation Plan
 
 ### Phase 1: Foundation Enhancement (Week 1-2)

@@ -15,6 +15,8 @@ class AashuScheduler(threading.Thread):
         self.notified_today = set()
         self.alarm_fired = False
         self.last_checked_day = datetime.datetime.now().date()
+        self.last_scene_summary = None
+        self.vision_learn_counter = 0
 
     def run(self):
         self.running = True
@@ -66,7 +68,21 @@ class AashuScheduler(threading.Thread):
                     except Exception as e:
                         print(f"Scheduler Calendar Read Error: {e}")
 
-                # 3. Trigger autonomous cognitive tick
+                # 3. Passive vision learning hook (approx every 60 seconds)
+                self.vision_learn_counter += 1
+                if self.vision_learn_counter % 6 == 0:
+                    try:
+                        learning = self.actuators.learning if self.actuators else None
+                        eyes = self.actuators.eyes if self.actuators else None
+                        if learning is not None and eyes is not None:
+                            summary = getattr(eyes, "scene_summary", None)
+                            if summary and summary != self.last_scene_summary:
+                                learning.learn_from_vision(summary)
+                                self.last_scene_summary = summary
+                    except Exception as e:
+                        print(f"Scheduler Vision Learning Error: {e}")
+
+                # 4. Trigger autonomous cognitive tick
                 tick_res = self.client.trigger_tick()
                 if isinstance(tick_res, dict) and tick_res.get("status") == "success":
                     tool_call = tick_res.get("tool_call")

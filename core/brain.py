@@ -10,9 +10,12 @@ from dataclasses import asdict
 from typing import Any
 
 from core.attention import GlobalWorkspace, Thought
+from core.autobiographical_memory import AutobiographicalMemory
 from core.consciousness import Consciousness
 from core.development import DynamicDevelopment
+from core.engine import BrainEngine
 from core.identity import DynamicIdentity
+from core.interactions import Interactions
 from core.internal_thoughts import generate_spontaneous
 from core.self_reflection import SelfReflection
 from chemicals.registry import ChemicalRegistry
@@ -78,14 +81,177 @@ DEFAULT_BIAS_MAPPING = {
     }
 }
 
-from cognition.autobiographical_memory import AutobiographicalMemory
 from cognition.belief_engine import BeliefEngine
+from cognition.enhanced_belief_engine import EnhancedBeliefEngine
 from cognition.narrative_engine import NarrativeEngine
 
 from decision.strategic_planner import StrategicPlanner
 from learning.appraisal_engine import AppraisalEngine
 from learning.similarity_engine import SimilarityEngine
 from memory.memory_manager import MemoryManager
+
+
+# =====================================================
+# DEFAULT BRAIN CONFIG
+# =====================================================
+
+DEFAULT_BRAIN_CONFIG: dict[str, Any] = {
+    "homeostasis": {
+        "target": 60.0,
+        "rate": 0.04,
+        "max_delta": 1.0,
+        "gentle_upward_max": 0.5,
+        "baselines": {
+            "dopamine": 65.0,
+            "cortisol": 45.0,
+            "oxytocin": 65.0,
+            "serotonin": 62.0,
+        },
+        "cortisol_decay_baseline": 45.0,
+        "cortisol_decay_rate": 0.04,
+        "serotonin_regulation_baseline": 60.0,
+        "oxytocin_floor": 62.0,
+        "oxytocin_floor_pull": 0.04,
+        "serotonin_pull_rate": 0.02,
+        "oxytocin_decay_multipliers": {
+            "high_social_value": 0.8,
+            "mid_social_value": 0.6,
+            "high_multiplier": 0.4,
+            "mid_multiplier": 0.7,
+        },
+    },
+    "decision_feedback": {"scale": 0.45, "max_delta": 3.0, "cortisol_max_delta": 0.6},
+    "risk": {"initial": 0.5, "adapt_rate": 0.02, "wisdom_gain": 0.003, "min": 0.1, "max": 0.9},
+    "fatigue": {
+        "recovery_rate": 0.98,
+        "reflection_depth_threshold": 50.0,
+        "reflection_depth_cost": 0.01,
+    },
+    "reflection": {
+        "decay_rate": 0.995,
+        "interval": 50,
+        "max_influence": 0.05,
+        "consciousness_boost": 0.04,
+        "consciousness_boost_max": 0.25,
+        "wisdom_gain": 0.05,
+        "reflection_depth_gain": 0.5,
+        "recent_window": 50,
+    },
+    "stress": {
+        "threshold": 50.0,
+        "burnout_threshold": 75.0,
+        "low_serotonin_level": 55.0,
+        "high_stress_level": 60.0,
+        "chronic_stress_level": 58.0,
+    },
+    "social": {
+        "decay_rate": 0.001,
+        "decay_floor": 0.0002,
+        "gain_hold_steps": 8,
+        "event_impacts": {
+            "ignored": 0.01,
+            "loneliness": 0.015,
+            "greeted": 0.02,
+            "praise": 0.015,
+            "face_recognized": 0.01,
+        },
+    },
+    "resilience": {
+        "growth_rate": 0.01,
+        "damage_rate": 0.02,
+        "emotional_dip_dopamine": 56.0,
+        "emotional_dip_serotonin": 56.0,
+        "chronic_stress_steps": 5,
+        "stress_load_cortisol": 55.0,
+        "stress_load_divisor": 25.0,
+        "stress_loss_base": 0.003,
+        "stress_loss_divisor": 2.5,
+        "recovery_cortisol": 54.0,
+        "recovery_dopamine": 57.0,
+        "recovery_serotonin": 58.0,
+        "recovery_strength_base": 0.004,
+        "recovery_serotonin_divisor": 20.0,
+        "soft_headroom_max": 2.5,
+        "hardening_base": 0.0015,
+        "hardening_min_intensity": 0.2,
+        "survival_cortisol": 45.0,
+        "survival_divisor": 70.0,
+        "comfort_steps": 12,
+        "comfort_cortisol": 50.0,
+        "complacency_base": 0.0008,
+    },
+    "development": {
+        "stage_learning_multipliers": {"child": 1.0, "teen": 1.25, "adult": 1.5},
+        "concept_stage_rate": {"child": 0.07, "teen": 0.09, "adult": 0.11},
+        "concept_confidence_default": 0.5,
+        "concept_salience_default": 0.3,
+        "concept_learning_base": 0.6,
+        "concept_confidence_weight": 0.4,
+        "concept_salience_weight": 0.4,
+        "concept_relations_max": 20,
+        "stage_boundaries": {
+            "teen_maturity": 0.45,
+            "teen_experience": 3.0,
+            "adult_maturity": 0.78,
+            "adult_experience": 8.0,
+        },
+        "maturity_target_weights": {"experience": 0.15, "intelligence": 0.35, "wisdom": 0.35},
+        "maturity_learning_rate": 0.05,
+        "maturity_reflection_depth_coefficient": 0.0004,
+        "stress_factor_cortisol": 50.0,
+        "stress_factor_divisor": 100.0,
+    },
+    "growth": {
+        "volatility_coefficient": 0.0008,
+        "regret_coefficient": 0.008,
+        "stress_recovery_bonus": 0.02,
+        "stability_coefficient": 0.01,
+        "reflection_depth_coefficient": 0.0003,
+        "wisdom_regret_coefficient": 0.003,
+        "wisdom_recovery_bonus": 0.01,
+        "wisdom_resilience_threshold": 0.6,
+        "wisdom_resilience_gain": 0.002,
+        "novelty_factor_divisor": 0.1,
+    },
+    "narrative": {
+        "update_interval": 25,
+        "update_recent_events": 100,
+        "identity_bias_scale": 0.1,
+    },
+    "recall": {
+        "max_delta": 2.0,
+        "responses": {
+            "positive": {"dopamine": 1.2, "cortisol": -0.3, "oxytocin": 0.4, "serotonin": 0.3},
+            "threat": {"dopamine": -0.3, "cortisol": 1.5, "oxytocin": -0.5, "serotonin": -0.4},
+            "failure": {"dopamine": -0.5, "cortisol": 0.8, "oxytocin": 0.0, "serotonin": -0.6},
+            "social_pain": {"dopamine": -0.4, "cortisol": 0.6, "oxytocin": -1.2, "serotonin": -0.5},
+            "neutral": {"dopamine": 0.2, "cortisol": 0.0, "oxytocin": 0.0, "serotonin": 0.0},
+        },
+    },
+    "acetylcholine": {"streak_scale": 3.5, "learning_rate_base": 0.05, "learning_rate_multiplier": 0.15},
+    "norepinephrine": {"novelty_scale": 15.0, "cortisol_delta_scale": 0.25},
+    "love": {"attachment_threshold": 0.6, "oxytocin_threshold": 60.0, "dopamine_threshold": 60.0},
+    "emotion": {"focus_threshold": 0.7, "high_emotion_hits": 3},
+    "curiosity": {"bonus_threshold": 0.6, "dopamine_reward": 12.0},
+    "reinforcement": {
+        "rpe_dopamine_scale": 5.0,
+        "rpe_dopamine_max_delta": 10.0,
+        "endorphin_regret_scale": 25.0,
+        "endorphin_cortisol_buffering": 0.15,
+        "endorphin_serotonin_boost": 0.1,
+    },
+    "hopfield": {"neurons": 9, "binarize_threshold": 50.0, "ach_scale_min": 0.3, "ach_scale_max": 1.2},
+}
+
+
+def _deep_merge(base: dict, override: dict | None) -> dict:
+    merged = dict(base)
+    for key, value in (override or {}).items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 
 class VirtualBrain:
@@ -99,10 +265,12 @@ class VirtualBrain:
         memory_storage_path: str | None = None,
         worldview_config: dict | None = None,
         global_workspace: Any = None,
+        brain_config: dict | None = None,
     ):
         self.deterministic = deterministic
         self.feedback_multiplier = feedback_multiplier
-        self.decision_feedback_scale = 0.45
+        self.brain_config = _deep_merge(DEFAULT_BRAIN_CONFIG, brain_config)
+        self.decision_feedback_scale = float(self.brain_config["decision_feedback"]["scale"])
         self.love_score = 0.0
         self.loved_source = None
         self.decision_engine = decision_engine
@@ -114,7 +282,10 @@ class VirtualBrain:
 
         self.autobiography = AutobiographicalMemory()
         self.narrative_engine = NarrativeEngine()
-        self.worldview = BeliefEngine(worldview_config)
+        if isinstance(worldview_config, dict) and worldview_config.get("engine") == "enhanced":
+            self.worldview = EnhancedBeliefEngine(worldview_config)
+        else:
+            self.worldview = BeliefEngine(worldview_config)
 
         self.similarity_engine = SimilarityEngine()
         self.appraisal_engine = AppraisalEngine(similarity_engine=self.similarity_engine)
@@ -145,67 +316,31 @@ class VirtualBrain:
 
         self.last_prediction_error = 1.0
         self.previous_chem_snapshot = {}
-        self.risk_tolerance = 0.5
-        self.risk_adapt_rate = 0.02
-        self.homeostasis_target = 60.0
-        self.homeostasis_rate = 0.04
-        self.homeostasis_max_delta = 1.0
-        self.homeostasis_gentle_upward_max = 0.5
-        self.cortisol_decay_baseline = 45.0
-        self.serotonin_regulation_baseline = 60.0
-        self.homeostasis_baselines = {
-            "dopamine": 65.0,
-            "cortisol": 45.0,
-            "oxytocin": 65.0,
-            "serotonin": 62.0,
-        }
-        self.recall_responses = {
-            "positive": {
-                "dopamine": 1.2,
-                "cortisol": -0.3,
-                "oxytocin": 0.4,
-                "serotonin": 0.3,
-            },
-            "threat": {
-                "dopamine": -0.3,
-                "cortisol": 1.5,
-                "oxytocin": -0.5,
-                "serotonin": -0.4,
-            },
-            "failure": {
-                "dopamine": -0.5,
-                "cortisol": 0.8,
-                "oxytocin": 0.0,
-                "serotonin": -0.6,
-            },
-            "social_pain": {
-                "dopamine": -0.4,
-                "cortisol": 0.6,
-                "oxytocin": -1.2,
-                "serotonin": -0.5,
-            },
-            "neutral": {
-                "dopamine": 0.2,
-                "cortisol": 0.0,
-                "oxytocin": 0.0,
-                "serotonin": 0.0,
-            },
-        }
+        self.risk_tolerance = float(self.brain_config["risk"]["initial"])
+        self.risk_adapt_rate = float(self.brain_config["risk"]["adapt_rate"])
+        self.homeostasis_target = float(self.brain_config["homeostasis"]["target"])
+        self.homeostasis_rate = float(self.brain_config["homeostasis"]["rate"])
+        self.homeostasis_max_delta = float(self.brain_config["homeostasis"]["max_delta"])
+        self.homeostasis_gentle_upward_max = float(self.brain_config["homeostasis"]["gentle_upward_max"])
+        self.cortisol_decay_baseline = float(self.brain_config["homeostasis"]["cortisol_decay_baseline"])
+        self.serotonin_regulation_baseline = float(self.brain_config["homeostasis"]["serotonin_regulation_baseline"])
+        self.homeostasis_baselines = dict(self.brain_config["homeostasis"]["baselines"])
+        self.recall_responses = dict(self.brain_config["recall"]["responses"])
 
         self.fatigue = 0.0
-        self.fatigue_recovery_rate = 0.98
-        self.reflection_decay_rate = 0.995
-        self.max_reflection_influence = 0.05
+        self.fatigue_recovery_rate = float(self.brain_config["fatigue"]["recovery_rate"])
+        self.reflection_decay_rate = float(self.brain_config["reflection"]["decay_rate"])
+        self.max_reflection_influence = float(self.brain_config["reflection"]["max_influence"])
 
         self.stress_accumulator = 0
         self.recovery_counter = 0
-        self.stress_threshold = 50
-        self.burnout_threshold = 75
-        self.resilience_growth_rate = 0.01
-        self.resilience_damage_rate = 0.02
-        self.social_decay_rate = 0.001
-        self.social_decay_floor = 0.0002
-        self.social_gain_hold_steps = 8
+        self.stress_threshold = float(self.brain_config["stress"]["threshold"])
+        self.burnout_threshold = float(self.brain_config["stress"]["burnout_threshold"])
+        self.resilience_growth_rate = float(self.brain_config["resilience"]["growth_rate"])
+        self.resilience_damage_rate = float(self.brain_config["resilience"]["damage_rate"])
+        self.social_decay_rate = float(self.brain_config["social"]["decay_rate"])
+        self.social_decay_floor = float(self.brain_config["social"]["decay_floor"])
+        self.social_gain_hold_steps = int(self.brain_config["social"]["gain_hold_steps"])
 
         self.interaction_matrix = interaction_matrix or {}
         self.step_counter = 0
@@ -215,7 +350,8 @@ class VirtualBrain:
         self.sleeping = False
         self.sleep_ticks_left = 0
         self.network_mode = "TPN"
-        self.hopfield_weights = [[0.0 for _ in range(9)] for _ in range(9)]
+        self._hopfield_neurons = int(self.brain_config["hopfield"]["neurons"])
+        self.hopfield_weights = [[0.0 for _ in range(self._hopfield_neurons)] for _ in range(self._hopfield_neurons)]
         self.attachment_system = AttachmentSystem()
         self.curiosity_engine = CuriosityEngine()
         self.goal_system = GoalSystem()
@@ -245,13 +381,9 @@ class VirtualBrain:
         self.concept_aliases = self.text_processor.concept_aliases
         self.concept_memory = {}
         self.development_stage = "child"
-        self.stage_learning_multipliers = {
-            "child": 1.0,
-            "teen": 1.25,
-            "adult": 1.5,
-        }
-        self.reflection_interval = 50
-        self.narrative_update_interval = 25
+        self.stage_learning_multipliers = dict(self.brain_config["development"]["stage_learning_multipliers"])
+        self.reflection_interval = int(self.brain_config["reflection"]["interval"])
+        self.narrative_update_interval = int(self.brain_config["narrative"]["update_interval"])
         self._reflection_consciousness_boost = 0.0
         self.perceptions_since_reflection = 0
         self.complacency_counter = 0
@@ -260,6 +392,12 @@ class VirtualBrain:
 
         self.chemicals = ChemicalRegistry(chemical_configs)
         self._original_baselines = {name: float(config["baseline"]) for name, config in chemical_configs.items()}
+        self._engine = BrainEngine(
+            state=self.chemicals,
+            interactions=Interactions(self.interaction_matrix),
+            deterministic=self.deterministic,
+            brain=self,
+        )
         self.bias_engine = BiasEngine(DEFAULT_BIAS_CONFIGS, DEFAULT_BIAS_MAPPING)
         self._last_maturity = self.development.maturity
         self.tool_connector = ToolConnector()
@@ -284,11 +422,14 @@ class VirtualBrain:
         # 3. Dynamic Acetylcholine (ACh) attention focus tracking
         if "acetylcholine" in self.chemicals:
             streak = getattr(self.global_workspace, "_streak", 0) or getattr(self.global_workspace, "streak", 0)
-            self.chemicals["acetylcholine"]["value"] = min(100.0, self.chemicals["acetylcholine"]["value"] + streak * 3.5)
+            ach_streak_scale = float(self.brain_config["acetylcholine"]["streak_scale"])
+            self.chemicals["acetylcholine"]["value"] = min(100.0, self.chemicals["acetylcholine"]["value"] + streak * ach_streak_scale)
             self._clamp()
             ach_val = self.chemicals["acetylcholine"]["value"] / 100.0
             if self.decision_engine:
-                self.decision_engine.learning_rate = 0.05 + 0.15 * ach_val
+                ach_lr_base = float(self.brain_config["acetylcholine"]["learning_rate_base"])
+                ach_lr_mult = float(self.brain_config["acetylcholine"]["learning_rate_multiplier"])
+                self.decision_engine.learning_rate = ach_lr_base + ach_lr_mult * ach_val
 
         decision_output = None
         regret = 0.0
@@ -312,25 +453,28 @@ class VirtualBrain:
             ne_baseline = self.chemicals["norepinephrine"]["baseline"]
             ne_decay = self.chemicals["norepinephrine"]["decay"]
             ne_val += (ne_baseline - ne_val) * ne_decay
-            ne_val += self._step_perception_novelty * 15.0
+            ne_val += self._step_perception_novelty * float(self.brain_config["norepinephrine"]["novelty_scale"])
             cort_delta = max(0.0, self.chemicals["cortisol"]["value"] - self.previous_chem_snapshot.get("cortisol", 40.0))
-            ne_val += cort_delta * 0.25
+            ne_val += cort_delta * float(self.brain_config["norepinephrine"]["cortisol_delta_scale"])
             self.chemicals["norepinephrine"]["value"] = max(0.0, min(100.0, ne_val))
             self._clamp()
 
         self.chemicals.update_receptor_dynamics()
 
+        low_serotonin_level = float(self.brain_config["stress"]["low_serotonin_level"])
+        high_stress_level = float(self.brain_config["stress"]["high_stress_level"])
+        chronic_stress_level = float(self.brain_config["stress"]["chronic_stress_level"])
         serotonin = self.chemicals.get("serotonin", {}).get("value", 0.0)
         cortisol = self.chemicals.get("cortisol", {}).get("value", 0.0)
-        if serotonin < 55.0:
+        if serotonin < low_serotonin_level:
             self._low_serotonin_steps += 1
         else:
             self._low_serotonin_steps = 0
-        if cortisol > 60.0:
+        if cortisol > high_stress_level:
             self._high_stress_steps += 1
         else:
             self._high_stress_steps = 0
-        if cortisol > 58.0:
+        if cortisol > chronic_stress_level:
             self._chronic_stress_steps += 1
         else:
             self._chronic_stress_steps = max(0, self._chronic_stress_steps - 1)
@@ -373,19 +517,23 @@ class VirtualBrain:
 
 
         # Calculate active Love Score based on current focus and chemical levels
+        love_cfg = self.brain_config["love"]
+        attachment_threshold = float(love_cfg["attachment_threshold"])
+        oxytocin_threshold = float(love_cfg["oxytocin_threshold"])
+        dopamine_threshold = float(love_cfg["dopamine_threshold"])
         self.love_score = 0.0
         self.loved_source = None
         if self.current_focus and hasattr(self, "attachment_system") and self.attachment_system:
             c_source = self.current_focus.source or ""
             attach = self.attachment_system.get_attachment(c_source)
-            if attach > 0.6:
+            if attach > attachment_threshold:
                 oxt = self.chemicals["oxytocin"]["value"] if "oxytocin" in self.chemicals else 0.0
                 da = self.chemicals["dopamine"]["value"] if "dopamine" in self.chemicals else 0.0
-                if oxt > 60.0 and da > 60.0:
+                if oxt > oxytocin_threshold and da > dopamine_threshold:
                     self.love_score = attach * (oxt / 100.0) * (da / 100.0)
                     self.loved_source = c_source
         focus_emotional = float(getattr(self.current_focus, "emotional_weight", 0.0) or 0.0)
-        threshold = 0.7
+        threshold = float(self.brain_config["emotion"]["focus_threshold"])
         self._high_emotion_window.append(bool(self.current_focus and focus_emotional > threshold))
         high_emotion_hits = sum(1 for flag in self._high_emotion_window if flag)
 
@@ -415,7 +563,7 @@ class VirtualBrain:
             if recall_effect.get("applied"):
                 self._clamp()
 
-        gate_pass = high_emotion_hits >= 3
+        gate_pass = high_emotion_hits >= int(self.brain_config["emotion"]["high_emotion_hits"])
         self._decision_debug["gate_pass"] = gate_pass
 
         recent_valence_avg = 0.0
@@ -442,7 +590,10 @@ class VirtualBrain:
         if (
             decision_output is None
             and self.current_focus
-            and (high_emotion_hits >= 3 or self._high_stress_steps >= 3)
+            and (
+                high_emotion_hits >= int(self.brain_config["emotion"]["high_emotion_hits"])
+                or self._high_stress_steps >= int(self.brain_config["emotion"]["high_emotion_hits"])
+            )
         ):
             decision_output = self._build_fallback_decision(self.current_focus)
             self._decision_debug["decision_path"] = "fallback"
@@ -479,24 +630,29 @@ class VirtualBrain:
                     reward = 1.0 - (regret * 2.0)
                     mood_tone = str(self.worldview.mood_state.get("tone", "neutral")).lower()
                     rpe = self.decision_engine.update_q_value(mood_tone, action, reward)
-                    dopamine_change = rpe * 5.0
-                    dopamine_change = max(-10.0, min(10.0, dopamine_change))
+                    reinforcement_cfg = self.brain_config["reinforcement"]
+                    dopamine_change = rpe * float(reinforcement_cfg["rpe_dopamine_scale"])
+                    dopamine_change = max(
+                        -float(reinforcement_cfg["rpe_dopamine_max_delta"]),
+                        min(float(reinforcement_cfg["rpe_dopamine_max_delta"]), dopamine_change),
+                    )
                     self.chemicals["dopamine"]["value"] = max(0.0, min(100.0, self.chemicals["dopamine"]["value"] + dopamine_change))
                     self._clamp()
 
         self._update_cognitive_growth(regret)
 
         # Spike Endorphins on regret resolution and apply physiological buffering
+        reinforcement_cfg = self.brain_config["reinforcement"]
         if regret > 0.0 and "endorphins" in self.chemicals:
-            self.chemicals["endorphins"]["value"] = min(100.0, self.chemicals["endorphins"]["value"] + regret * 25.0)
+            self.chemicals["endorphins"]["value"] = min(100.0, self.chemicals["endorphins"]["value"] + regret * float(reinforcement_cfg["endorphin_regret_scale"]))
             self._clamp()
 
         if "endorphins" in self.chemicals:
             endorphin_val = self.chemicals["endorphins"]["value"]
             if "cortisol" in self.chemicals:
-                self.chemicals["cortisol"]["value"] = max(0.0, self.chemicals["cortisol"]["value"] - endorphin_val * 0.15)
+                self.chemicals["cortisol"]["value"] = max(0.0, self.chemicals["cortisol"]["value"] - endorphin_val * float(reinforcement_cfg["endorphin_cortisol_buffering"]))
             if "serotonin" in self.chemicals:
-                self.chemicals["serotonin"]["value"] = min(100.0, self.chemicals["serotonin"]["value"] + endorphin_val * 0.10)
+                self.chemicals["serotonin"]["value"] = min(100.0, self.chemicals["serotonin"]["value"] + endorphin_val * float(reinforcement_cfg["endorphin_serotonin_boost"]))
             self._clamp()
 
         stage_changed = self._update_stage_transition()
@@ -524,9 +680,9 @@ class VirtualBrain:
         if self.current_focus and hasattr(self, "curiosity_engine") and self.curiosity_engine:
             c_topic = self.current_focus.topic or self.current_focus.metadata.get("category") or self.current_focus.source
             c_bonus = self.curiosity_engine.get_curiosity_bonus(c_topic)
-            if c_bonus > 0.6:
+            if c_bonus > float(self.brain_config["curiosity"]["bonus_threshold"]):
                 if "dopamine" in self.chemicals:
-                    self.chemicals["dopamine"]["value"] += c_bonus * 12.0
+                    self.chemicals["dopamine"]["value"] += c_bonus * float(self.brain_config["curiosity"]["dopamine_reward"])
                     self._clamp()
 
         # Update active goal strength based on chosen action outcome
@@ -884,16 +1040,20 @@ class VirtualBrain:
 
     def _update_cognitive_growth(self, regret):
         growth_multiplier = self.stage_learning_multipliers.get(self.development_stage, 1.0)
+        growth_cfg = self.brain_config["growth"]
+        dev_cfg = self.brain_config["development"]
 
         volatility = sum(
             abs(self.chemicals[k]["value"] - self.previous_chem_snapshot.get(k, 0))
             for k in self.chemicals
         )
-        novelty_factor = 1 / (1 + self.experience * 0.1)
+        novelty_factor = 1 / (1 + self.experience * float(growth_cfg["novelty_factor_divisor"]))
         stress_recovered = self.stress_accumulator > 0 and self.recovery_counter > 3
 
         experience_gain = (
-            volatility * 0.0008 + abs(regret) * 0.008 + (0.02 if stress_recovered else 0)
+            volatility * float(growth_cfg["volatility_coefficient"])
+            + abs(regret) * float(growth_cfg["regret_coefficient"])
+            + (float(growth_cfg["stress_recovery_bonus"]) if stress_recovered else 0)
         ) * novelty_factor * growth_multiplier
         self.experience += experience_gain
 
@@ -901,7 +1061,8 @@ class VirtualBrain:
         stability = max(0, self.last_prediction_error - prediction_error)
 
         intelligence_gain = (
-            stability * 0.01 + self.development.reflection_depth * 0.0003
+            stability * float(growth_cfg["stability_coefficient"])
+            + self.development.reflection_depth * float(growth_cfg["reflection_depth_coefficient"])
         ) * growth_multiplier
         self.intelligence = max(0.3, min(1.0, self.intelligence + intelligence_gain))
 
@@ -909,23 +1070,24 @@ class VirtualBrain:
 
         wisdom_gain = 0.0
         if regret > 0 and stability > 0:
-            wisdom_gain += regret * 0.003 * growth_multiplier
+            wisdom_gain += regret * float(growth_cfg["wisdom_regret_coefficient"]) * growth_multiplier
         if stress_recovered:
-            wisdom_gain += 0.01 * growth_multiplier
-        if self.identity.get("resilience") > 0.6 and regret > 0:
-            wisdom_gain += 0.002 * growth_multiplier
+            wisdom_gain += float(growth_cfg["wisdom_recovery_bonus"]) * growth_multiplier
+        if self.identity.get("resilience") > float(growth_cfg["wisdom_resilience_threshold"]) and regret > 0:
+            wisdom_gain += float(growth_cfg["wisdom_resilience_gain"]) * growth_multiplier
 
         self.wisdom = min(1.0, self.wisdom + wisdom_gain)
 
+        target_weights = dev_cfg["maturity_target_weights"]
         maturity_target = (
-            self.experience * 0.15
-            + self.intelligence * 0.35
-            + self.wisdom * 0.35
-            + self.development.reflection_depth * 0.0004
+            self.experience * float(target_weights["experience"])
+            + self.intelligence * float(target_weights["intelligence"])
+            + self.wisdom * float(target_weights["wisdom"])
+            + self.development.reflection_depth * float(dev_cfg["maturity_reflection_depth_coefficient"])
         )
         cortisol_level = self.chemicals.get("cortisol", {}).get("value", 0.0)
-        stress_factor = max(0.1, 1.0 - max(0.0, cortisol_level - 50.0) / 100.0)
-        maturity_delta = max(0.0, maturity_target - self.development.maturity) * 0.05 * stress_factor
+        stress_factor = max(0.1, 1.0 - max(0.0, cortisol_level - float(dev_cfg["stress_factor_cortisol"])) / float(dev_cfg["stress_factor_divisor"]))
+        maturity_delta = max(0.0, maturity_target - self.development.maturity) * float(dev_cfg["maturity_learning_rate"]) * stress_factor
         self.development.maturity = min(1.0, self.development.maturity + maturity_delta)
 
         self.previous_chem_snapshot = {k: self.chemicals[k]["value"] for k in self.chemicals}
@@ -934,7 +1096,8 @@ class VirtualBrain:
         if self.perceptions_since_reflection < self.reflection_interval:
             return
 
-        recent_perceptions = list(self.recent_perceptions)[-50:]
+        reflection_cfg = self.brain_config["reflection"]
+        recent_perceptions = list(self.recent_perceptions)[-int(reflection_cfg["recent_window"]):]
         if not recent_perceptions:
             return
 
@@ -951,10 +1114,13 @@ class VirtualBrain:
         }
         self.perceive(reflection_event)
 
-        self.development.reflection_depth += 0.5
-        self.self_reflection.wisdom = min(1.0, self.self_reflection.wisdom + 0.05)
-        self.wisdom = min(1.0, self.wisdom + 0.05)
-        self._reflection_consciousness_boost = min(0.25, self._reflection_consciousness_boost + 0.04)
+        self.development.reflection_depth += float(reflection_cfg["reflection_depth_gain"])
+        self.self_reflection.wisdom = min(1.0, self.self_reflection.wisdom + float(reflection_cfg["wisdom_gain"]))
+        self.wisdom = min(1.0, self.wisdom + float(reflection_cfg["wisdom_gain"]))
+        self._reflection_consciousness_boost = min(
+            float(reflection_cfg["consciousness_boost_max"]),
+            self._reflection_consciousness_boost + float(reflection_cfg["consciousness_boost"]),
+        )
         self._refresh_narrative(force=True)
         self.perceptions_since_reflection = 0
 
@@ -1116,19 +1282,20 @@ class VirtualBrain:
         if not hasattr(self.identity, "traits") or "social_value" not in self.identity.traits:
             return
         value = float(self.identity.traits.get("social_value", 0.0))
+        impacts = self.brain_config["social"]["event_impacts"]
 
         if category == "ignored":
-            value -= 0.01 * intensity
+            value -= float(impacts["ignored"]) * intensity
         elif category == "loneliness":
-            value -= 0.015 * intensity
+            value -= float(impacts["loneliness"]) * intensity
         elif category == "greeted":
-            value += 0.02 * intensity
+            value += float(impacts["greeted"]) * intensity
             self._social_decay_hold_counter = max(self._social_decay_hold_counter, self.social_gain_hold_steps)
         elif category == "praise":
-            value += 0.015 * intensity
+            value += float(impacts["praise"]) * intensity
             self._social_decay_hold_counter = max(self._social_decay_hold_counter, self.social_gain_hold_steps)
         elif category == "face_recognized":
-            value += 0.01
+            value += float(impacts["face_recognized"])
 
         self.identity.traits["social_value"] = round(max(-0.3, min(1.0, value)), 4)
 
@@ -1170,10 +1337,11 @@ class VirtualBrain:
                 recalled_intensity = float(raw_intensity)
         scale = max(0.0, min(1.0, recalled_intensity if recalled_intensity else 0.7))
 
+        recall_max_delta = float(self.brain_config["recall"]["max_delta"])
         for chem, raw_delta in response.items():
             if chem not in self.chemicals:
                 continue
-            delta = max(-2.0, min(2.0, float(raw_delta) * scale))
+            delta = max(-recall_max_delta, min(recall_max_delta, float(raw_delta) * scale))
             self.chemicals[chem]["value"] += delta
 
         return {"type": memory_type, "scale": round(scale, 4), "applied": True}
@@ -1408,15 +1576,16 @@ class VirtualBrain:
             return
 
         now_step = self.step_counter
-        stage_rate = {
-            "child": 0.07,
-            "teen": 0.09,
-            "adult": 0.11,
-        }.get(self.development_stage, 0.07)
+        dev_cfg = self.brain_config["development"]
+        stage_rate = float(dev_cfg["concept_stage_rate"].get(self.development_stage, dev_cfg["concept_stage_rate"]["child"]))
 
-        confidence = scene.get("confidence", 0.5)
-        salience = scene.get("salience", 0.3)
-        learning_gain = stage_rate * (0.6 + 0.4 * confidence) * (0.6 + 0.4 * salience)
+        confidence = scene.get("confidence", float(dev_cfg["concept_confidence_default"]))
+        salience = scene.get("salience", float(dev_cfg["concept_salience_default"]))
+        learning_gain = stage_rate * (
+            float(dev_cfg["concept_learning_base"]) + float(dev_cfg["concept_confidence_weight"]) * confidence
+        ) * (
+            float(dev_cfg["concept_learning_base"]) + float(dev_cfg["concept_salience_weight"]) * salience
+        )
 
         for concept in concepts:
             entry = self.concept_memory.get(
@@ -1443,17 +1612,19 @@ class VirtualBrain:
             for rel in scene.get("relations", []):
                 if rel["from"] == concept or rel["to"] == concept:
                     entry["relations"].append(rel)
-                    if len(entry["relations"]) > 20:
-                        entry["relations"] = entry["relations"][-20:]
+                    relations_max = int(dev_cfg["concept_relations_max"])
+                    if len(entry["relations"]) > relations_max:
+                        entry["relations"] = entry["relations"][-relations_max:]
             self.concept_memory[concept] = entry
 
     def _compute_development_stage(self):
         m = self.development.maturity
         e = self.experience
+        bounds = self.brain_config["development"]["stage_boundaries"]
 
-        if m < 0.45 and e < 3.0:
+        if m < float(bounds["teen_maturity"]) and e < float(bounds["teen_experience"]):
             return "child"
-        if m < 0.78 and e < 8.0:
+        if m < float(bounds["adult_maturity"]) and e < float(bounds["adult_experience"]):
             return "teen"
         return "adult"
 
@@ -1509,8 +1680,8 @@ class VirtualBrain:
     def _update_reflection_balance(self):
         self.development.reflection_depth *= self.reflection_decay_rate
 
-        if self.development.reflection_depth > 50:
-            self.fatigue += 0.01
+        if self.development.reflection_depth > float(self.brain_config["fatigue"]["reflection_depth_threshold"]):
+            self.fatigue += float(self.brain_config["fatigue"]["reflection_depth_cost"])
 
         cortisol = self.chemicals.get("cortisol", {}).get("value", 0)
 
@@ -1523,6 +1694,7 @@ class VirtualBrain:
         if not hasattr(self.identity, "traits") or "resilience" not in self.identity.traits:
             return
 
+        res_cfg = self.brain_config["resilience"]
         adversity_intensity = max(0.0, min(1.0, float(self._step_adversity_intensity)))
         has_negative_step = any(v < 0.0 for v in self._step_perception_valences)
         resilience = max(0.0, float(self.identity.traits.get("resilience", 0.5)))
@@ -1531,30 +1703,32 @@ class VirtualBrain:
         dopamine = float(self.chemicals.get("dopamine", {}).get("value", 0.0))
         serotonin = float(self.chemicals.get("serotonin", {}).get("value", 0.0))
 
-        in_emotional_dip = has_negative_step or dopamine < 56.0 or serotonin < 56.0
+        in_emotional_dip = has_negative_step or dopamine < float(res_cfg["emotional_dip_dopamine"]) or serotonin < float(res_cfg["emotional_dip_serotonin"])
         if in_emotional_dip:
             self._emotional_dip_active = True
 
-        if self._chronic_stress_steps >= 5:
-            stress_load = max(0.0, (cortisol - 55.0) / 25.0)
-            stress_loss = 0.003 * (1.0 + min(1.5, stress_load))
-            resilience -= stress_loss * (1.0 + min(1.0, resilience / 2.5))
+        if self._chronic_stress_steps >= int(res_cfg["chronic_stress_steps"]):
+            stress_load = max(0.0, (cortisol - float(res_cfg["stress_load_cortisol"])) / float(res_cfg["stress_load_divisor"]))
+            stress_loss = float(res_cfg["stress_loss_base"]) * (1.0 + min(1.5, stress_load))
+            resilience -= stress_loss * (1.0 + min(1.0, resilience / float(res_cfg["stress_loss_divisor"])))
 
         recovered = (
             self._emotional_dip_active
-            and cortisol < 54.0
-            and dopamine > 57.0
-            and serotonin > 58.0
+            and cortisol < float(res_cfg["recovery_cortisol"])
+            and dopamine > float(res_cfg["recovery_dopamine"])
+            and serotonin > float(res_cfg["recovery_serotonin"])
         )
         if recovered:
-            recovery_strength = 0.004 + (0.004 * max(0.0, (serotonin - 58.0) / 20.0))
-            soft_headroom = max(0.1, 2.5 - resilience)
-            resilience += recovery_strength * (soft_headroom / 2.5)
+            recovery_strength = float(res_cfg["recovery_strength_base"]) + (
+                float(res_cfg["recovery_strength_base"]) * max(0.0, (serotonin - float(res_cfg["recovery_serotonin"])) / float(res_cfg["recovery_serotonin_divisor"]))
+            )
+            soft_headroom = max(0.1, float(res_cfg["soft_headroom_max"]) - resilience)
+            resilience += recovery_strength * (soft_headroom / float(res_cfg["soft_headroom_max"]))
             self._emotional_dip_active = False
 
         if adversity_intensity > 0.0 or has_negative_step:
-            hardening = 0.0015 * max(0.2, adversity_intensity)
-            survival_factor = max(0.2, 1.0 - max(0.0, cortisol - 45.0) / 70.0)
+            hardening = float(res_cfg["hardening_base"]) * max(float(res_cfg["hardening_min_intensity"]), adversity_intensity)
+            survival_factor = max(0.2, 1.0 - max(0.0, cortisol - float(res_cfg["survival_cortisol"])) / float(res_cfg["survival_divisor"]))
             resilience += hardening * survival_factor
             self._comfort_steps = 0
             self.stress_accumulator += 1
@@ -1562,94 +1736,49 @@ class VirtualBrain:
         else:
             self._comfort_steps += 1
             self.recovery_counter += 1
-            if self._comfort_steps >= 12 and cortisol < 50.0:
-                complacency = 0.0008 * max(0.2, resilience / 2.5)
+            if self._comfort_steps >= int(res_cfg["comfort_steps"]) and cortisol < float(res_cfg["comfort_cortisol"]):
+                complacency = float(res_cfg["complacency_base"]) * max(0.2, resilience / float(res_cfg["soft_headroom_max"]))
                 resilience -= complacency
 
         self.identity.traits["resilience"] = round(max(0.0, resilience), 4)
 
+    def _apply_interactions(self):
+        self._engine.apply_interactions()
+
     def _apply_homeostasis(self):
-        has_positive_perception = any(v > 0 for v in self._step_perception_valences)
-        for chem_name, data in self.chemicals.items():
-            current = data["value"]
-            target = float(self.homeostasis_baselines.get(chem_name, data.get("baseline", self.homeostasis_target)))
-            delta = (target - current) * self.homeostasis_rate
-            delta = max(-self.homeostasis_max_delta, min(self.homeostasis_max_delta, delta))
-
-            if chem_name == "dopamine" and delta > 0 and not has_positive_perception:
-                delta = min(delta, self.homeostasis_gentle_upward_max)
-
-            if chem_name == "oxytocin" and delta < 0:
-                social_value = float(self.identity.get("social_value"))
-                if social_value > 0.8:
-                    oxytocin_decay_multiplier = 0.4
-                elif social_value > 0.6:
-                    oxytocin_decay_multiplier = 0.7
-                else:
-                    oxytocin_decay_multiplier = 1.0
-                delta *= oxytocin_decay_multiplier
-
-            if chem_name == "cortisol":
-                excess = max(0.0, current - self.cortisol_decay_baseline)
-                cortisol_decay = 0.04 * excess
-                delta -= cortisol_decay
-                delta = max(-self.homeostasis_max_delta, min(self.homeostasis_max_delta, delta))
-
-            updated = current + delta
-            if chem_name == "oxytocin" and updated < 62.0:
-                updated += (62.0 - updated) * 0.04
-            if chem_name == "serotonin":
-                serotonin_pull = (self.serotonin_regulation_baseline - updated) * 0.02
-                updated += serotonin_pull
-            data["value"] = updated
+        self._engine.apply_homeostasis()
 
     def _apply_noise(self):
-        if self.deterministic:
-            return
-
-        for data in self.chemicals.values():
-            variation = random.uniform(-data["noise"], data["noise"])
-            data["value"] += variation
-
-    def _apply_interactions(self):
-        deltas = {}
-
-        for source, targets in self.interaction_matrix.items():
-            if source not in self.chemicals:
-                continue
-
-            source_value = self.chemicals[source]["value"]
-            for target, weight in targets.items():
-                if target not in self.chemicals:
-                    continue
-                deltas[target] = deltas.get(target, 0) + source_value * weight
-
-        for target, delta in deltas.items():
-            self.chemicals[target]["value"] += delta
+        self._engine.apply_noise()
 
     def _apply_decision_feedback(self, feedback: dict):
+        df_cfg = self.brain_config["decision_feedback"]
+        max_delta = float(df_cfg["max_delta"])
         for chem, delta in feedback.items():
             if chem in self.chemicals:
-                bounded = max(-3.0, min(3.0, delta * self.feedback_multiplier * self.decision_feedback_scale))
+                bounded = max(-max_delta, min(max_delta, delta * self.feedback_multiplier * self.decision_feedback_scale))
                 if chem == "cortisol":
-                    bounded = max(-0.6, min(0.6, bounded))
+                    bounded = max(
+                        -float(df_cfg["cortisol_max_delta"]),
+                        min(float(df_cfg["cortisol_max_delta"]), bounded),
+                    )
                 self.chemicals[chem]["value"] += self._saturation_scaled_delta(chem, bounded)
 
     def _clamp(self):
-        for chem_name, data in self.chemicals.items():
-            data["value"] = max(data["min"], min(data["value"], data["max"]))
-            if chem_name == "cortisol":
-                data["value"] = min(100.0, data["value"])
+        self._engine.clamp()
+        if "cortisol" in self.chemicals:
+            self.chemicals["cortisol"]["value"] = min(100.0, self.chemicals["cortisol"]["value"])
 
     def _binarize_state(self, chemicals: dict, identity: dict) -> list[int]:
         chems = ["dopamine", "cortisol", "oxytocin", "serotonin", "norepinephrine"]
         traits = ["competence", "social_value", "resilience", "intelligence"]
+        threshold = float(self.brain_config["hopfield"]["binarize_threshold"])
         vec = []
         for c in chems:
             val = chemicals.get(c, 50.0)
             if isinstance(val, dict):
                 val = val.get("value", 50.0)
-            vec.append(1 if float(val) >= 50.0 else -1)
+            vec.append(1 if float(val) >= threshold else -1)
         for t in traits:
             val = identity.get(t, 0.5)
             vec.append(1 if float(val) >= 0.5 else -1)
@@ -1662,10 +1791,11 @@ class VirtualBrain:
         if ach:
             ach_val = ach.get("value", 50.0) if isinstance(ach, dict) else float(ach)
         ach_scale = ach_val / 100.0
-        update_multiplier = 0.3 + 1.2 * ach_scale
+        hopfield_cfg = self.brain_config["hopfield"]
+        update_multiplier = float(hopfield_cfg["ach_scale_min"]) + float(hopfield_cfg["ach_scale_max"]) * ach_scale
 
-        for i in range(9):
-            for j in range(9):
+        for i in range(self._hopfield_neurons):
+            for j in range(self._hopfield_neurons):
                 if i != j:
                     self.hopfield_weights[i][j] += float(p[i] * p[j]) * update_multiplier
 
@@ -1697,13 +1827,14 @@ class VirtualBrain:
         )
         self.autobiography.propose_memory_thought(self)
 
-        if self.step_counter % 25 == 0 and not self.worldview.get_active_beliefs(limit=1, min_confidence=0.3):
-            recent = self.autobiography.get_recent_events(100)
+        narrative_cfg = self.brain_config["narrative"]
+        if self.step_counter % self.narrative_update_interval == 0 and not self.worldview.get_active_beliefs(limit=1, min_confidence=0.3):
+            recent = self.autobiography.get_recent_events(int(narrative_cfg["update_recent_events"]))
             self.narrative_engine.update_narrative(recent)
 
             narrative_bias = self.narrative_engine.get_identity_bias()
             for trait, delta in narrative_bias.items():
-                self.identity.add_evidence(trait, delta * 0.1)
+                self.identity.add_evidence(trait, delta * float(narrative_cfg["identity_bias_scale"]))
 
             narrative_thought = Thought(
                 content=f"I updated my narrative: {self.narrative_engine.get_current_narrative()}",

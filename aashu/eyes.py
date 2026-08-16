@@ -15,6 +15,7 @@ class AashuEyes(threading.Thread):
         self.daemon = True
         self.last_face_crop = None
         self.last_frame = None
+        self.scene_summary = None
 
         # Load OpenCV Haar Cascade face detector
         self.face_cascade = None
@@ -134,6 +135,21 @@ class AashuEyes(threading.Thread):
                     attributes["camera"] = ["bright"]
                 elif avg_brightness < 0.25:
                     attributes["camera"] = ["dark"]
+
+                # Build a learning-worthy scene summary for the vision learning hook
+                summary_parts = []
+                if recognized_user:
+                    summary_parts.append(f"a face of the user {recognized_user}")
+                elif "face" in objects:
+                    summary_parts.append("an unknown face")
+                if motion_ratio > 0.05:
+                    summary_parts.append(f"notable motion (level {motion_ratio:.2f})")
+                if "bright" in attributes.get("camera", []):
+                    summary_parts.append("a bright environment")
+                elif "dark" in attributes.get("camera", []):
+                    summary_parts.append("a dark environment")
+                if summary_parts:
+                    self.scene_summary = "Seen in the environment: " + ", ".join(summary_parts) + "."
 
                 # Non-blocking post to structured visual endpoint
                 threading.Thread(

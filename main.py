@@ -64,6 +64,11 @@ def load_decision_config():
     return payload.get("decision", payload)
 
 
+def load_brain_config():
+    with open("config/brain.yaml", "r") as f:
+        return yaml.safe_load(f) or {}
+
+
 # =====================================================
 # MAIN
 # =====================================================
@@ -86,6 +91,7 @@ def main():
 
     chemical_configs = load_chemical_config()
     decision_config = load_decision_config()
+    brain_config = load_brain_config()
     decision_engine = DecisionEngine(
         decision_config=decision_config,
         deterministic=args.deterministic,
@@ -95,7 +101,8 @@ def main():
         chemical_configs=chemical_configs["chemicals"],
         interaction_matrix=chemical_configs.get("interactions"),
         decision_engine=decision_engine,
-        deterministic=args.deterministic
+        deterministic=args.deterministic,
+        brain_config=brain_config,
     )
     if loaded_state:
         brain.set_state(loaded_state)

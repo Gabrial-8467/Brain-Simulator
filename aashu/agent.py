@@ -6,6 +6,7 @@ import psutil
 from .config import WAKE_WORD
 from .brain_client import BrainClient
 from .ollama_client import OllamaClient
+from .learning import AashuLearning
 from .ears import AashuEars
 from .mouth import AashuMouth
 from .eyes import AashuEyes
@@ -71,6 +72,8 @@ def run_agent():
     ears = AashuEars()
     mouth = AashuMouth()
     actuators = AashuActuators(mouth=mouth, brain_client=brain)
+    learning = AashuLearning(brain_client=brain, ollama=ollama)
+    actuators.learning = learning
 
     # Verify REST Server connection
     if not brain.check_connection():
@@ -128,6 +131,8 @@ def run_agent():
             if WAKE_WORD not in text_lower:
                 # Log general background speech to the brain but do not respond proactively
                 brain.send_hearing_signal(transcript=transcript, speaker_type="unknown", source="background")
+                # Passive learning from background conversation
+                learning.learn_from_hearing(transcript, speaker="unknown")
                 brain.trigger_tick()
                 continue
 
