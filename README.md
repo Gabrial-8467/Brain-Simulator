@@ -213,3 +213,36 @@ brain.receive_hearing_signal({
 
 - The decision engine is attached directly in `main.py` to enable active action selection, RL learning, and planning.
 - This repository is a research/development prototype, not a production chatbot stack.
+
+## Free Cloud Deployment (Render.com)
+
+You can deploy the Virtual Brain server to **Render (render.com)** for free as a Web Service:
+
+### Step 1: Create Web Service
+1. Sign in to your [Render Dashboard](https://dashboard.render.com/).
+2. Click **New** -> **Web Service**.
+3. Connect your GitHub/GitLab repository.
+
+### Step 2: Configure Settings
+* **Name:** `virtual-brain-server`
+* **Region:** (Select the closest one to you)
+* **Branch:** `main`
+* **Runtime:** `Docker` (Render will automatically detect the `Dockerfile` at the root)
+* **Instance Type:** `Free`
+
+### Step 3: Add Environment Variables
+Click **Advanced** -> **Add Environment Variable**:
+* `PORT` = `10000` (or leave empty; Render will configure this automatically)
+* `BRAIN_DATA_DIR` = `/tmp` (Free tier has ephemeral storage; using `/tmp` avoids file permission issues)
+* `BRAIN_API_KEY` = `your-secure-custom-key` (Any custom password to secure your endpoints; if configured, requests must supply the `X-API-Key` header)
+
+### Step 4: Deploy and Connect Client
+1. Click **Create Web Service**.
+2. Once deployed, copy your public URL (e.g. `https://virtual-brain-server.onrender.com`).
+3. Set your public URL and API key in the client's `config.py` (either in the local package or `Aashu-Client` outside the repo):
+   ```python
+   BRAIN_API_URL = "https://virtual-brain-server.onrender.com"
+   BRAIN_API_KEY = "your-secure-custom-key"
+   ```
+4. Start your client: `python run_client.py`.
+
