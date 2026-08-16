@@ -1,4 +1,4 @@
-from memory.vector_store import (
+from .local_vector_store import (
     KNOWLEDGE_STORE_PATH,
     KNOWLEDGE_COLLECTION,
     STOPWORDS,

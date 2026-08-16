@@ -2325,7 +2325,37 @@ class AashuActuators:
         return res.get("message", "Error: Could not build SQL schema.")
 
     def _build_fullstack(self, name, kind="food_delivery", backend="flask", frontend="single", theme="light"):
-        from cognition.app_builder import _BACKEND_ALIASES, _FRONTEND_ALIASES, _KIND_ALIASES, _normalize_kind
+        _KIND_ALIASES = {
+            "food": "food_delivery", "delivery": "food_delivery", "zomato": "food_delivery",
+            "swiggy": "food_delivery", "restaurant": "food_delivery",
+            "ecommerce": "ecommerce", "ecommerce store": "ecommerce", "store": "ecommerce",
+            "shop": "ecommerce", "shopping": "ecommerce",
+            "booking": "booking", "bookings": "booking", "reservation": "booking",
+            "reservations": "booking", "appointment": "booking", "appointments": "booking",
+            "task": "task_tracker", "tasks": "task_tracker", "todo": "task_tracker",
+            "tracker": "task_tracker",
+            "chat": "chat", "chatroom": "chat", "messaging": "chat", "messages": "chat",
+            "blog": "blog", "blogs": "blog", "cms": "blog", "articles": "blog", "article": "blog",
+            "notes": "notes", "note": "notes", "notebook": "notes",
+            "fitness": "fitness", "workout": "fitness", "workouts": "fitness", "health": "fitness",
+        }
+        _BACKEND_ALIASES = {
+            "fl": "flask", "flask": "flask",
+            "dj": "django", "django": "django",
+            "express": "express", "expressjs": "express", "node": "express",
+            "fastify": "fastify", "fx": "fastify", "fastapi": "fastify",
+        }
+        _FRONTEND_ALIASES = {
+            "react": "react", "reactjs": "react", "vite": "react",
+            "single": "single", "html": "single", "vanilla": "single",
+        }
+        def _normalize_kind(k):
+            key = str(k or "").strip().lower().replace("-", " ").replace("_", " ")
+            kinds = {"food_delivery", "ecommerce", "task_tracker", "chat", "booking", "blog", "notes", "fitness"}
+            if key in kinds:
+                return key
+            return _KIND_ALIASES.get(key) or (_KIND_ALIASES.get(key.split()[0]) if key.split() else None)
+
         kind = (kind or "").strip()
         kind_key = _normalize_kind(kind)
         if kind_key is None:

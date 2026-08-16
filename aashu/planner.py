@@ -1,7 +1,7 @@
 import re
 import datetime
 
-from core.tool_connector import ToolConnector
+from .local_tool_connector import ToolConnector
 
 
 def _today_str():
