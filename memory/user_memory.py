@@ -113,6 +113,73 @@ class UserMemory:
             lines.append(f"- [{prefix}] {content}")
         return "\n".join(lines)
 
+    def consolidate(self):
+        """Derive durable traits from repeated facts.
+
+        Groups stored facts by type and content pattern; when several facts
+        agree, a single consolidated 'trait' fact is stored and the individual
+        low-importance sources are removed."""
+        facts = self.store.items
+        if len(facts) < 3:
+            return 0
+        traits = {}
+        for f in facts:
+            if f.get("derived"):
+                continue
+            content = (f.get("content") or "").lower().strip()
+            if len(content.split()) > 4:
+                continue
+            t = f.get("fact_type", "general")
+            traits.setdefault(t, []).append(f)
+        created = 0
+        for ftype, group in traits.items():
+            if len(group) < 2:
+                continue
+            contents = {f["content"].strip().lower() for f in group}
+            if len(contents) < 2:
+                continue
+            for f in group:
+                if f.get("importance", 0.6) < 0.5:
+                    self.store.delete(f["id"])
+            trait_content = "; ".join(f["content"].strip() for f in group)
+            trait = {
+                "id": uuid.uuid4().hex[:12],
+                "content": f"Traits ({ftype}): {trait_content}",
+                "fact_type": "trait",
+                "importance": 0.9,
+                "timestamp": _now_iso(),
+                "derived": True,
+            }
+            self.store.store(trait)
+            created += 1
+        return created
+
+    def decay(self, half_life_days=90):
+        """Importance-weighted forgetting.
+
+        Older, low-importance facts decay until they fall below the retention
+        floor and are removed. Deterministic — no randomness involved."""
+        now = datetime.datetime.now()
+        removed = 0
+        for f in self.store.items:
+            importance = float(f.get("importance", 0.6))
+            try:
+                ts = datetime.datetime.fromisoformat(f.get("timestamp", _now_iso()))
+            except ValueError:
+                ts = now
+            age_days = max(0.0, (now - ts).total_seconds() / 86400.0)
+            if importance >= 1.0:
+                continue
+            decayed = importance * 0.5 ** (age_days / max(1.0, half_life_days * importance))
+            if decayed < 0.15:
+                if self.store.delete(f["id"]):
+                    removed += 1
+            elif abs(decayed - importance) > 1e-9:
+                f["importance"] = round(decayed, 3)
+                f["content"] = f.get("content", "")
+                self.store.update(f)
+        return removed
+
     def to_state(self):
         return {
             "user_name": self.user_name,

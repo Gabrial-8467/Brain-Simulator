@@ -31,6 +31,14 @@ LANGUAGES = {
     "python", "javascript", "typescript", "java", "c++", "c#", "csharp", "golang", "go",
     "rust", "ruby", "php", "swift", "kotlin", "html", "css", "sql", "bash", "shell",
     "lua", "dart", "r", "matlab", "scala", "perl", "haskell", "elixir", "cobol",
+    # JavaScript ecosystem
+    "nodejs", "reactjs", "react", "angular", "vuejs", "vue", "nextjs", "svelte",
+    "electron", "express", "fastify", "nestjs", "jest", "threejs",
+    # Python ecosystem
+    "django", "flask", "fastapi", "pandas", "numpy", "matplotlib", "requests",
+    "beautifulsoup", "bs4", "selenium", "scikit-learn", "tensorflow", "pytorch",
+    # Query and data stores
+    "nosql", "mongodb", "mongo",
 }
 
 CONCEPT_KEYWORDS = {

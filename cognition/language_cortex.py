@@ -3,18 +3,38 @@ from collections import Counter
 
 LANGUAGE_ALIASES = {
     "py": "python", "python3": "python", "python2": "python",
-    "js": "javascript", "node": "javascript", "nodejs": "javascript", "javascripts": "javascript",
+    "js": "javascript", "javascripts": "javascript", "node.js": "nodejs",
     "ts": "typescript",
+    "react": "reactjs", "react.js": "reactjs",
+    "vue": "vuejs", "vue.js": "vuejs",
+    "next": "nextjs", "next.js": "nextjs",
+    "node": "nodejs",
+    "expressjs": "express", "express.js": "express",
+    "fastifyjs": "fastify", "fastify.js": "fastify",
+    "nest": "nestjs",
     "cpp": "c++", "cplusplus": "c++",
     "csharp": "c#",
     "golang": "go",
     "sh": "shell", "bash": "shell", "shellscript": "shell",
+    "mongodb": "nosql", "mongo": "nosql", "couchdb": "nosql", "redis": "nosql",
+    "mysql": "sql", "postgresql": "sql", "postgres": "sql", "sqlite": "sql",
+    "beautifulsoup4": "beautifulsoup", "bs4": "beautifulsoup",
+    "sklearn": "scikit-learn", "tf": "tensorflow",
 }
 
 LANGUAGES = [
-    "python", "javascript", "typescript", "java", "c++", "c#", "go", "rust", "ruby",
-    "php", "swift", "kotlin", "html", "css", "sql", "bash", "shell", "lua", "dart",
-    "r", "matlab", "scala", "perl", "haskell", "elixir", "cobol",
+    # Core languages
+    "python", "javascript", "typescript", "java", "c++", "c#", "go", "rust",
+    "ruby", "php", "swift", "kotlin", "html", "css", "sql", "bash", "shell",
+    "lua", "dart", "r", "matlab", "scala", "perl", "haskell", "elixir", "cobol",
+    # JavaScript ecosystem (frameworks, runtimes, libraries)
+    "nodejs", "reactjs", "angular", "vuejs", "nextjs", "svelte", "electron",
+    "express", "fastify", "nestjs", "jest", "threejs",
+    # Python ecosystem (libraries and frameworks)
+    "django", "flask", "fastapi", "pandas", "numpy", "matplotlib", "requests",
+    "beautifulsoup", "selenium", "scikit-learn", "tensorflow", "pytorch",
+    # Query and data stores
+    "nosql",
 ]
 
 CONCEPT_KEYWORDS = [
@@ -91,6 +111,186 @@ SHELL_TEMPLATES = {
     "math": 'echo "Result: $((1 + 2 + 3))"',
     "loop": 'for i in alpha bravo charlie; do echo "$i"; done',
     "default": "# Generated shell script for the task.\necho \"Task complete\"",
+}
+
+JSX_TEMPLATES = {
+    "hello": (
+        "export default function App() {\n"
+        "  return <h1>Hello, world!</h1>;\n"
+        "}\n"
+    ),
+    "math": (
+        "export default function App() {\n"
+        "  const numbers = [1, 2, 3, 4, 5];\n"
+        "  const total = numbers.reduce((s, n) => s + n, 0);\n"
+        "  return <p>Result: {total}</p>;\n"
+        "}\n"
+    ),
+    "default": (
+        "export default function App() {\n"
+        "  return <div>Generated React component.</div>;\n"
+        "}\n"
+    ),
+}
+
+TS_TEMPLATES = {
+    "hello": (
+        "function greet(name: string): string {\n"
+        "  return `Hello, ${name}!`;\n"
+        "}\n"
+        "console.log(greet('world'));\n"
+    ),
+    "math": (
+        "const numbers: number[] = [1, 2, 3, 4, 5];\n"
+        "const total = numbers.reduce((s, n) => s + n, 0);\n"
+        "console.log(`Result: ${total}`);\n"
+    ),
+    "default": (
+        "interface Task { name: string; done: boolean }\n"
+        "const task: Task = { name: 'sample', done: false };\n"
+        "console.log(task);\n"
+    ),
+}
+
+VUE_TEMPLATES = {
+    "hello": (
+        "<template>\n  <h1>Hello, world!</h1>\n</template>\n"
+        "<script>\nexport default { name: 'App' };\n</script>\n"
+    ),
+    "default": (
+        "<template>\n  <p>{{ message }}</p>\n</template>\n"
+        "<script>\nexport default {\n"
+        "  data() { return { message: 'Generated Vue component' }; },\n"
+        "};\n</script>\n"
+    ),
+}
+
+NODE_TEMPLATES = {
+    "hello": (
+        "const http = require('http');\n"
+        "http.createServer((req, res) => {\n"
+        "  res.end('Hello, world!');\n"
+        "}).listen(3000);\n"
+    ),
+    "default": (
+        "// Generated Node.js script.\n"
+        "const http = require('http');\n"
+        "http.createServer((req, res) => {\n"
+        "  res.end('ok');\n"
+        "}).listen(3000);\n"
+    ),
+}
+
+SERVER_TEMPLATES = {
+    "hello": (
+        "const express = require('express');\n"
+        "const app = express();\n"
+        "app.get('/', (req, res) => res.send('Hello, world!'));\n"
+        "app.listen(3000, () => console.log('Listening on :3000'));\n"
+    ),
+    "default": (
+        "// Generated API server.\n"
+        "const express = require('express');\n"
+        "const app = express();\n"
+        "app.get('/', (req, res) => res.json({ ok: true }));\n"
+        "app.listen(3000);\n"
+    ),
+}
+
+PYTHON_WEB_TEMPLATES = {
+    "flask": (
+        "from flask import Flask\n"
+        "app = Flask(__name__)\n"
+        "@app.route('/')\n"
+        "def home():\n"
+        "    return 'Hello, world!'\n"
+        "if __name__ == '__main__':\n"
+        "    app.run(debug=True)\n"
+    ),
+    "django": (
+        "# Add this app to INSTALLED_APPS and run 'python manage.py migrate'.\n"
+        "from django.http import HttpResponse\n"
+        "def index(request):\n"
+        "    return HttpResponse('Hello, world!')\n"
+    ),
+    "fastapi": (
+        "from fastapi import FastAPI\n"
+        "app = FastAPI()\n"
+        "@app.get('/')\n"
+        "def root():\n"
+        "    return {'message': 'Hello, world!'}\n"
+    ),
+}
+
+PYTHON_LIB_TEMPLATES = {
+    "pandas": (
+        "import pandas as pd\n"
+        "df = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]})\n"
+        "print(df.describe())\n"
+    ),
+    "numpy": (
+        "import numpy as np\n"
+        "a = np.array([1, 2, 3, 4, 5])\n"
+        "print(np.sum(a))\n"
+    ),
+    "matplotlib": (
+        "import matplotlib.pyplot as plt\n"
+        "import numpy as np\n"
+        "x = np.linspace(0, 10, 100)\n"
+        "plt.plot(x, np.sin(x))\n"
+        "plt.show()\n"
+    ),
+    "requests": (
+        "import requests\n"
+        "r = requests.get('https://api.example.com')\n"
+        "print(r.status_code)\n"
+    ),
+    "beautifulsoup": (
+        "from bs4 import BeautifulSoup\n"
+        "soup = BeautifulSoup(html, 'html.parser')\n"
+        "print(soup.get_text())\n"
+    ),
+    "selenium": (
+        "from selenium import webdriver\n"
+        "browser = webdriver.Chrome()\n"
+        "browser.get('https://example.com')\n"
+        "browser.quit()\n"
+    ),
+    "scikit-learn": (
+        "from sklearn.ensemble import RandomForestClassifier\n"
+        "model = RandomForestClassifier()\n"
+        "print(model)\n"
+    ),
+    "tensorflow": (
+        "import tensorflow as tf\n"
+        "model = tf.keras.Sequential([tf.keras.layers.Dense(1)])\n"
+        "print(model.summary())\n"
+    ),
+    "pytorch": (
+        "import torch\n"
+        "x = torch.tensor([1.0, 2.0, 3.0])\n"
+        "print(x.mean())\n"
+    ),
+}
+
+NOSQL_TEMPLATES = {
+    "hello": "db.users.insertOne({ hello: 'world' })\n",
+    "default": (
+        "// Generated NoSQL (MongoDB) queries.\n"
+        "db.users.insertOne({ name: 'sample', active: true });\n"
+        "db.users.find({ active: true });\n"
+    ),
+}
+
+COMMENT_STYLE = {
+    "python": "#", "ruby": "#", "shell": "#", "bash": "#", "perl": "#", "elixir": "#",
+    "javascript": "//", "typescript": "//", "nodejs": "//", "reactjs": "//", "angular": "//",
+    "vuejs": "//", "nextjs": "//", "svelte": "//", "electron": "//", "express": "//",
+    "fastify": "//", "nestjs": "//", "jest": "//", "threejs": "//",
+    "java": "//", "c++": "//", "c#": "//", "go": "//", "rust": "//", "swift": "//",
+    "kotlin": "//", "scala": "//", "dart": "//", "php": "//",
+    "sql": "--", "nosql": "//", "lua": "--", "haskell": "--", "r": "#", "matlab": "%",
+    "cobol": "*", "html": "<!-- ", "css": "/* ",
 }
 
 TASK_INTENTS = [
@@ -182,17 +382,47 @@ class LanguageCortex:
     def _build_code(self, task, lang):
         intent = _detect_intent(task)
         ref = _reference_comments(self.languages.get(lang, {}).get("snippets", []))
+
         if lang == "python":
             body = PY_TEMPLATES.get(intent, PY_TEMPLATES["default"].format(task=task))
         elif lang == "javascript":
             body = JS_TEMPLATES.get(intent, JS_TEMPLATES["default"])
         elif lang in ("shell", "bash"):
             body = SHELL_TEMPLATES.get(intent, SHELL_TEMPLATES["default"])
+        elif lang == "reactjs":
+            body = JSX_TEMPLATES.get(intent, JSX_TEMPLATES["default"])
+        elif lang in ("angular", "typescript"):
+            body = TS_TEMPLATES.get(intent, TS_TEMPLATES["default"])
+        elif lang == "vuejs":
+            body = VUE_TEMPLATES.get(intent, VUE_TEMPLATES["default"])
+        elif lang == "nextjs":
+            body = JSX_TEMPLATES["default"].replace(
+                "Generated React component.", "Generated Next.js page."
+            )
+        elif lang == "nodejs":
+            body = NODE_TEMPLATES.get(intent, NODE_TEMPLATES["default"])
+        elif lang in ("express", "fastify", "nestjs"):
+            body = SERVER_TEMPLATES.get(intent, SERVER_TEMPLATES["default"])
+        elif lang in ("django", "flask", "fastapi"):
+            body = PYTHON_WEB_TEMPLATES.get(lang, PYTHON_WEB_TEMPLATES["flask"])
+        elif lang in PYTHON_LIB_TEMPLATES:
+            body = PYTHON_LIB_TEMPLATES[lang]
+        elif lang == "nosql":
+            body = NOSQL_TEMPLATES.get(intent, NOSQL_TEMPLATES["default"])
         else:
+            comment = COMMENT_STYLE.get(lang, "#")
+            if lang == "html":
+                comment = "<!--"
+                close = "-->"
+            elif lang == "css":
+                comment = "/*"
+                close = "*/"
+            else:
+                close = ""
             body = (
-                f"# Generated {lang} code for task: {task}\n"
-                f"# Learned: {int(self.languages.get(lang, {}).get('entries', 0))} examples\n"
-                f"print('Generated {lang} stub.')"
+                f"{comment} Generated {lang} code for task: {task}{close}\n"
+                f"{comment} Learned: {int(self.languages.get(lang, {}).get('entries', 0))} examples{close}\n"
+                f"{comment} Minimal {lang} stub.{close}"
             )
         return ref + body
 

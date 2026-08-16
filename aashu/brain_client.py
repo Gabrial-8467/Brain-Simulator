@@ -201,6 +201,49 @@ class BrainClient:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
+    def build_website(self, name="My Website", title=None, sections=None, theme="light"):
+        try:
+            r = requests.post(f"{self.base_url}/brain/build_website", json={
+                "name": name, "title": title, "sections": sections, "theme": theme,
+            }, timeout=10.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def build_webapp(self, name="My App", app_name="app", features=None, pages=None):
+        try:
+            r = requests.post(f"{self.base_url}/brain/build_webapp", json={
+                "name": name, "app_name": app_name, "features": features, "pages": pages,
+            }, timeout=10.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def build_reactapp(self, name="My App", app_name="app", features=None, pages=None):
+        try:
+            r = requests.post(f"{self.base_url}/brain/build_reactapp", json={
+                "name": name, "app_name": app_name, "features": features, "pages": pages,
+            }, timeout=10.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def build_cli(self, name="tool", task=None, args=None):
+        try:
+            r = requests.post(f"{self.base_url}/brain/build_cli", json={
+                "name": name, "task": task, "args": args,
+            }, timeout=10.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def list_apps(self):
+        try:
+            r = requests.get(f"{self.base_url}/brain/apps", timeout=3.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
     def generate_code(self, task, language="python"):
         try:
             r = requests.post(f"{self.base_url}/brain/generate_code", json={

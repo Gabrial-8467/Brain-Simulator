@@ -80,6 +80,22 @@ class InProcessBrainClient:
             return {"status": "success", **match}
         return {"status": "no_match"}
 
+    def build_website(self, name="My Website", title=None, sections=None, theme="light"):
+        ok, result = self.brain.build_website(name=name, title=title, sections=sections, theme=theme)
+        return {"status": "success" if ok else "not_learned", "message": result}
+
+    def build_webapp(self, name="My App", app_name="app", features=None, pages=None):
+        ok, result = self.brain.build_webapp(name=name, app_name=app_name, features=features, pages=pages)
+        return {"status": "success" if ok else "not_learned", "message": result}
+
+    def build_reactapp(self, name="My App", app_name="app", features=None, pages=None):
+        ok, result = self.brain.build_reactapp(name=name, app_name=app_name, features=features, pages=pages)
+        return {"status": "success" if ok else "not_learned", "message": result}
+
+    def build_cli(self, name="tool", task=None, args=None):
+        ok, result = self.brain.build_cli(name=name, task=task, args=args)
+        return {"status": "success" if ok else "not_learned", "message": result}
+
 
 def build_brain():
     tmp = tempfile.mkdtemp(prefix="aashu_demo_")
@@ -130,13 +146,14 @@ def main():
     print(f"Registered {len(tools)} tools with the brain.")
     for query in [
         "set a timer for 10 minutes",
+        "set a timer for 90 seconds to take the cookies out",
         "calculate 45 * 3 + 12",
         "what do you know about me",
         "open the browser",
     ]:
         match = brain.resolve_tool(query)
         if match:
-            print(f"  '{query}'\n      -> tool={match['name']}  args={match['arguments']}  conf={match['confidence']}")
+            print(f"  '{query}'\n      -> tool={match['name']}  args={match['arguments']}  conf={match['confidence']}  (seconds is {type(match['arguments'].get('seconds')).__name__})")
         else:
             print(f"  '{query}'\n      -> no match")
 
@@ -208,6 +225,113 @@ def main():
     })
     print("  scene_summary/recognition hooks available; presence -> user_memory + vision learning pipeline.")
     print("  recent focus after presence event:", brain.current_focus.content if brain.current_focus else None)
+    print("  richer vision now tracks: motion_direction, moving_objects (blobs), time_of_day, last_visual_report()")
+
+    # ---------------------------------------------------------------
+    section("6. FULL APP / WEBSITE GENERATION  (brain-owned AppBuilder)")
+    print("Gate check: build_website('Portfolio', ...) before learning html")
+    ok, msg = brain.build_website("Portfolio", title="Portfolio", sections="Home;About;Contact")
+    print(f"  -> ok={ok}, message={msg!r}")
+
+    print("\nAashu learns HTML from the internet:")
+    brain.perceive({
+        "content": "Learn the programming language html. HTML uses tags like <html>, <body>, <h1> for headings, "
+                   "<p> for paragraphs, <a href> for links, <section> for sections, and <style> for CSS.",
+        "category": "learning",
+        "modality": "experience",
+        "valence": 0.4,
+        "intensity": 0.6,
+        "source": "internet",
+    })
+    print(f"  known languages: {brain.language_cortex.known_languages()}")
+
+    ok, msg = brain.build_website("Portfolio", title="My Portfolio", sections="Home;About;Contact", theme="dark")
+    print(f"\nbuild_website('Portfolio', theme=dark) ->\n  {msg}")
+    ok, msg = brain.build_webapp("TaskBoard", app_name="app", features="auth;dashboard", pages="Home;About")
+    print(f"\nbuild_webapp('TaskBoard') ->\n  {msg}")
+    ok, msg = brain.build_cli("greet", task="print a greeting", args="name")
+    print(f"\nbuild_cli('greet') ->\n  {msg}")
+
+    print("\nAppBuilder project list:")
+    for p in brain.app_builder.list_projects():
+        print(f"  - {p['name']}: {', '.join(p['files'])}")
+
+    print("\nAashu learns the JS ecosystem from the internet:")
+    brain.perceive({
+        "content": "Learn the programming language reactjs. React uses JSX: components are functions returning JSX, "
+                   "props come in as arguments, useState manages state, and the default export is the App component.",
+        "category": "learning",
+        "modality": "experience",
+        "valence": 0.4,
+        "intensity": 0.6,
+        "source": "internet",
+    })
+    brain.perceive({
+        "content": "Learn the programming language express. Express is a Node.js web framework: "
+                   "app.get('/path', handler) defines routes and app.listen(port) starts the server.",
+        "category": "learning",
+        "modality": "experience",
+        "valence": 0.4,
+        "intensity": 0.6,
+        "source": "internet",
+    })
+    brain.perceive({
+        "content": "Learn the programming language nosql. NoSQL querying uses MongoDB syntax: "
+                   "db.collection.find({ field: value }) and db.collection.insertOne({ data: true }).",
+        "category": "learning",
+        "modality": "experience",
+        "valence": 0.4,
+        "intensity": 0.6,
+        "source": "internet",
+    })
+    print(f"  known languages: {brain.language_cortex.known_languages()}")
+
+    for task, lang in [("build a hello world component", "reactjs"), ("start an api server", "express"), ("query active users", "nosql")]:
+        ok, code = brain.generate_code(task, lang)
+        print(f"\n  generate_code({task!r}, '{lang}') -> ok={ok}")
+        print("  " + code.splitlines()[0] + ("" if len(code.splitlines()) == 1 else " ..."))
+
+    ok, msg = brain.build_reactapp("Dashboard", app_name="Dashboard", features="auth;charts", pages="Home;About")
+    print(f"\nbuild_reactapp('Dashboard') ->\n  {msg}")
+    print("\nAppBuilder project list:")
+    for p in brain.app_builder.list_projects():
+        print(f"  - {p['name']}: {', '.join(p['files'])}")
+
+    # ---------------------------------------------------------------
+    section("7. MEMORY CONSOLIDATION  (traits + forgetting curve)")
+    print("Adding several short preference facts:")
+    for fact in ["I like tea", "I prefer tea", "I drink tea daily"]:
+        client.remember_user(fact, fact_type="preference", importance=0.4)
+    before = brain.user_memory.profile()["total_facts"]
+    created = brain.consolidate_user_memory()
+    print(f"  before={before}, traits_created={created}")
+    print("  traits now stored:")
+    for f in brain.user_memory.facts():
+        if f.get("derived"):
+            print(f"    [trait] {f['content']}")
+    removed = brain.decay_user_memory()
+    print(f"  decay() removed {removed} stale low-importance facts.")
+
+    # ---------------------------------------------------------------
+    section("8. SHARPER TOOL CALLING  (named groups + typed args)")
+    for query in [
+        "set a timer for 45 seconds to brew the tea",
+        "build a website called Portfolio",
+        "build a web app called TaskBoard",
+        "build a react app called Dashboard",
+        "remind me in 5 minutes",
+    ]:
+        match = brain.resolve_tool(query)
+        if match:
+            args_desc = ", ".join(f"{k}={v!r}" for k, v in match["arguments"].items())
+            print(f"  '{query}'\n      -> tool={match['name']}  args={{ {args_desc} }}  conf={match['confidence']}")
+        else:
+            print(f"  '{query}'\n      -> no match")
+
+    print("\nPlanner 'build a website called Portfolio':")
+    planner2 = PlanExecutor(actuators, brain_client=client)
+    report3 = planner2.execute("build a website called Portfolio")
+    print(planner2.format_report(report3))
 
     # ---------------------------------------------------------------
     section("SUMMARY")
@@ -215,6 +339,7 @@ def main():
     print(f"  Known languages:   {brain.language_cortex.known_languages()}")
     print(f"  User facts stored: {brain.user_memory.profile()['total_facts']}")
     print(f"  Goal system:       {brain.goal_system.goals}")
+    print(f"  Generated apps:    {len(brain.app_builder.list_projects())} project(s) under generated_apps/")
     print(f"  Memory dir:        {tmp_dir}")
 
     brain.memory_manager.storage.save()

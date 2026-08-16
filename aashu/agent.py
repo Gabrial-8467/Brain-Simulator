@@ -111,6 +111,10 @@ def run_agent():
     scheduler = AashuScheduler(brain_client=brain, actuators=actuators)
     scheduler.start()
 
+    # 5b. Rolling conversation memory (persisted across restarts)
+    from .conversation import ConversationHistory
+    history = ConversationHistory()
+
     print("\nAashu is fully initialized and operational!")
     mouth.speak("Aashu system online.")
 
@@ -292,6 +296,8 @@ def run_agent():
             except Exception:
                 user_context = ""
 
+            conversation_block = history.to_prompt_block(limit=6)
+
             system_prompt = f"""
 You are Aashu, the physical voice and assistant body of a Virtual Brain simulator.
 Current Brain Focus: {focus_content}
@@ -299,6 +305,9 @@ Current Internal Self-Narrative: {self_narrative}
 Current Emotional Mood: {mood}
 Personality Directive: {personality_directives}
 {user_context}
+
+Recent conversation:
+{conversation_block}
 
 Your response must be short, helpful, and strictly align with your current emotional mood ({mood}) and active personality directives. Speak as an active assistant.
 """
@@ -313,7 +322,10 @@ Your response must be short, helpful, and strictly align with your current emoti
 
             # 4. Regulate response voice through brain personality channels
             regulated_response = brain.regulate_speech(raw_response)
-            
+
+            # 4b. Remember this exchange in conversation history
+            history.add_turn(query, regulated_response)
+
             # 5. Speak the response out loud
             mouth.speak(regulated_response)
 

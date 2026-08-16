@@ -72,6 +72,23 @@ class RememberUserRequest(BaseModel):
     fact_type: Optional[str] = "general"
     importance: Optional[float] = 0.6
 
+class BuildWebsiteRequest(BaseModel):
+    name: Optional[str] = "My Website"
+    title: Optional[str] = None
+    sections: Optional[str] = None
+    theme: Optional[str] = "light"
+
+class BuildWebappRequest(BaseModel):
+    name: Optional[str] = "My App"
+    app_name: Optional[str] = "app"
+    features: Optional[str] = None
+    pages: Optional[str] = None
+
+class BuildCliRequest(BaseModel):
+    name: Optional[str] = "tool"
+    task: Optional[str] = None
+    args: Optional[str] = None
+
 class HearingSignalRequest(BaseModel):
     transcript: str
     speaker_type: Optional[str] = "unknown"
@@ -386,11 +403,53 @@ def get_user_memory_context(context: str = ""):
         raise HTTPException(status_code=500, detail="Brain not initialized")
     return {"status": "success", "context": brain.user_context(context or None)}
 
+@app.post("/user_memory/consolidate")
+def post_user_memory_consolidate():
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    created = brain.consolidate_user_memory()
+    removed = brain.decay_user_memory()
+    return {"status": "success", "traits_created": created, "facts_decayed": removed}
+
 @app.get("/user_memory/profile")
 def get_user_memory_profile():
     if not brain:
         raise HTTPException(status_code=500, detail="Brain not initialized")
     return {"status": "success", "profile": brain.user_profile()}
+
+@app.post("/brain/build_website")
+def post_brain_build_website(req: BuildWebsiteRequest):
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    ok, result = brain.build_website(name=req.name, title=req.title, sections=req.sections, theme=req.theme)
+    return {"status": "success" if ok else "not_learned", "message": result}
+
+@app.post("/brain/build_webapp")
+def post_brain_build_webapp(req: BuildWebappRequest):
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    ok, result = brain.build_webapp(name=req.name, app_name=req.app_name, features=req.features, pages=req.pages)
+    return {"status": "success" if ok else "not_learned", "message": result}
+
+@app.post("/brain/build_reactapp")
+def post_brain_build_reactapp(req: BuildWebappRequest):
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    ok, result = brain.build_reactapp(name=req.name, app_name=req.app_name, features=req.features, pages=req.pages)
+    return {"status": "success" if ok else "not_learned", "message": result}
+
+@app.post("/brain/build_cli")
+def post_brain_build_cli(req: BuildCliRequest):
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    ok, result = brain.build_cli(name=req.name, task=req.task, args=req.args)
+    return {"status": "success" if ok else "not_learned", "message": result}
+
+@app.get("/brain/apps")
+def get_brain_apps():
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    return {"status": "success", "apps": brain.list_apps()}
 
 # =====================================================
 # ACTION/TOOL REGISTRY ENDPOINTS

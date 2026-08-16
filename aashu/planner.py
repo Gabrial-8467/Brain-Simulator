@@ -56,13 +56,26 @@ class PlanExecutor:
                 {"name": "optimize_memory", "arguments": {}, "description": "Free up system memory"},
             ]
 
-        if "learn" in g and "learn about" not in g:
-            topic = re.sub(r".*learn\s+", "", goal).strip()
-            return [{"name": "learn_topic", "arguments": {"topic": topic}, "description": f"Learn about {topic} from the internet"}]
-
         if "learn about" in g:
             topic = re.sub(r".*learn about\s+", "", goal).strip()
             return [{"name": "learn_topic", "arguments": {"topic": topic}, "description": f"Learn about {topic} from the internet"}]
+
+        if "learn" in g:
+            topic = re.sub(r".*learn\s+", "", goal).strip()
+            return [{"name": "learn_topic", "arguments": {"topic": topic}, "description": f"Learn about {topic} from the internet"}]
+
+        # ---- App / website / CLI generation ----
+        m = re.search(r"build\s+(?:a|an)?\s*(react ?app|website|c#|web ?app|webapp|cli|tool|app)\s+(?:called|for|named)?\s*([\w\s\-]+)", goal, re.IGNORECASE)
+        kind = m.group(1).lower().replace(" ", "") if m else None
+        target = m.group(2).strip() if m and m.group(2) else goal
+        if kind in ("website",):
+            return [{"name": "build_website", "arguments": {"name": target, "title": target, "sections": "Home;About;Contact"}, "description": f"Build website for {target}"}]
+        if kind in ("webapp",):
+            return [{"name": "build_webapp", "arguments": {"name": target, "app_name": "app", "features": "Home", "pages": "Home;About"}, "description": f"Build web app for {target}"}]
+        if kind in ("reactapp",):
+            return [{"name": "build_reactapp", "arguments": {"name": target, "app_name": "app", "features": "Home", "pages": "Home;About"}, "description": f"Build React app for {target}"}]
+        if kind in ("cli", "tool", "app"):
+            return [{"name": "build_cli", "arguments": {"name": target, "task": target, "args": ""}, "description": f"Build CLI tool for {target}"}]
 
         if "code" in g or "write a program" in g:
             task = re.sub(r".*(write|generate|make|create)\s+(a\s+)?", "", goal).strip()
@@ -78,6 +91,31 @@ class PlanExecutor:
 
         if "note" in g and "remember" in g:
             return [{"name": "add_note", "arguments": {"content": goal}, "description": "Save a note"}]
+
+        if "timer" in g or "remind me in" in g:
+            m = re.search(r"(\d+)\s*(second|seconds|minute|minutes|hour|hours)?", g)
+            amount = int(m.group(1)) if m else 60
+            unit = (m.group(2) or "seconds").lower()
+            if unit.startswith("minute"):
+                amount *= 60
+            elif unit.startswith("hour"):
+                amount *= 3600
+            label = re.sub(r".*(timer|remind me)\s+", "", goal).strip().capitalize() or "Timer Alert"
+            return [{"name": "set_timer", "arguments": {"seconds": str(amount), "label": label}, "description": f"Set a timer for {amount} seconds"}]
+
+        if "email" in g:
+            return [{"name": "send_email", "arguments": {"to_address": "", "subject": goal, "body": ""}, "description": "Compose and send an email"}]
+
+        if "music" in g or "play a song" in g or "play some" in g:
+            return [{"name": "play_music", "arguments": {"filepath": ""}, "description": "Play music"}]
+
+        if "weather" in g or "forecast" in g:
+            m = re.search(r"(?:in|for)\s+([\w\s\-]+)", goal)
+            location = m.group(1).strip() if m else ""
+            return [{"name": "get_weather", "arguments": {"location": location}, "description": f"Fetch weather for {location or 'current location'}"}]
+
+        if "joke" in g:
+            return [{"name": "get_joke", "arguments": {}, "description": "Tell a joke"}]
 
         # Generic fallback: best single-tool match from the registry
         resolved = self._resolver().resolve(goal)
@@ -111,24 +149,24 @@ class PlanExecutor:
                 outcome = self.actuators.execute_tool(name, args)
             except Exception as e:
                 outcome = f"Execution Error: {e}"
-            results.append({"step": name, "arguments": args, "result": outcome})
             if "Error" in str(outcome) and "Error:" in str(outcome):
+                # Re-plan this single step: try an alternative tool that
+                # matches the same intent before counting it as a failure.
+                alternative = self._find_alternative(goal, name, step.get("description", ""))
+                if alternative:
+                    results.append({"step": name, "arguments": args,
+                                    "result": outcome, "retried_as": alternative["name"],
+                                    "retry_result": alternative["outcome"]})
+                    if "Error" not in str(alternative["outcome"]):
+                        successes += 1
+                        self._report_step(goal, alternative["name"], alternative["outcome"])
+                        continue
+                    outcome = f"{outcome} Retry via {alternative['name']} also failed: {alternative['outcome']}"
                 failures += 1
             else:
                 successes += 1
-
-            if self.brain_client is not None:
-                try:
-                    self.brain_client.send_perception_raw({
-                        "content": f"Plan step '{name}' for goal '{goal}' completed. Result: {outcome}",
-                        "category": "plan_step",
-                        "modality": "experience",
-                        "valence": 0.15 if "Error" not in str(outcome) else -0.3,
-                        "intensity": 0.4,
-                        "source": "planner",
-                    })
-                except Exception:
-                    pass
+            results.append({"step": name, "arguments": args, "result": outcome})
+            self._report_step(goal, name, outcome)
 
         if record_goal and self.brain_client is not None:
             try:
@@ -146,11 +184,46 @@ class PlanExecutor:
             "failures": failures,
         }
 
+    def _find_alternative(self, goal, failed_name, description=""):
+        """Try to find a different tool that can satisfy the same intent."""
+        if self.actuators is None:
+            return None
+        probe = f"{description} {goal}"
+        try:
+            resolved = self._resolver().resolve(probe)
+        except Exception:
+            return None
+        if not resolved or resolved["name"] == failed_name or resolved["name"] == "execute_task":
+            return None
+        try:
+            outcome = self.actuators.execute_tool(resolved["name"], resolved["arguments"])
+        except Exception as e:
+            outcome = f"Execution Error: {e}"
+        return {"name": resolved["name"], "outcome": outcome}
+
+    def _report_step(self, goal, name, outcome):
+        if self.brain_client is None:
+            return
+        try:
+            self.brain_client.send_perception_raw({
+                "content": f"Plan step '{name}' for goal '{goal}' completed. Result: {outcome}",
+                "category": "plan_step",
+                "modality": "experience",
+                "valence": 0.15 if "Error" not in str(outcome) else -0.3,
+                "intensity": 0.4,
+                "source": "planner",
+            })
+        except Exception:
+            pass
+
     def format_report(self, report):
         if report.get("status") == "no_plan":
             return report.get("message", "No plan available.")
         lines = [f"Plan for: {report['goal']}"]
         for res in report["results"]:
-            lines.append(f"  -> {res['step']}: {res['result']}")
+            if res.get("retried_as"):
+                lines.append(f"  -> {res['step']}: failed, retried as {res['retried_as']} -> {res.get('retry_result')}")
+            else:
+                lines.append(f"  -> {res['step']}: {res['result']}")
         lines.append(f"Completed: {report['successes']} steps, {report['failures']} issues.")
         return "\n".join(lines)

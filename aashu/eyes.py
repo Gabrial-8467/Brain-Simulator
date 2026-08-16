@@ -18,6 +18,11 @@ class AashuEyes(threading.Thread):
         self.scene_summary = None
         self.present_users = {}
         self.last_presence_event = None
+        self.motion_direction = "none"
+        self.blob_count = 0
+        self._prev_centroid = None
+        self.time_of_day = self._time_of_day()
+        self.last_report = {}
 
         # Load OpenCV Haar Cascade face detector
         self.face_cascade = None
@@ -107,8 +112,37 @@ class AashuEyes(threading.Thread):
             total_pixels = gray.size
             motion_ratio = float(motion_pixels) / float(total_pixels)
 
+            # 2b. Motion direction from the movement centroid trajectory
+            if motion_pixels > 200:
+                ys, xs = np.nonzero(diff_thresh)
+                centroid = (float(np.mean(xs)), float(np.mean(ys)))
+                if self._prev_centroid is not None:
+                    dx = centroid[0] - self._prev_centroid[0]
+                    dy = centroid[1] - self._prev_centroid[1]
+                    if abs(dx) < 1.5 and abs(dy) < 1.5:
+                        self.motion_direction = "still"
+                    elif abs(dx) > abs(dy):
+                        self.motion_direction = "left" if dx < 0 else "right"
+                    else:
+                        self.motion_direction = "up" if dy < 0 else "down"
+                self._prev_centroid = centroid
+            else:
+                self.motion_direction = "none"
+                self._prev_centroid = None
+
+            # 2c. Blob count: distinct moving regions (contours)
+            self.blob_count = 0
+            if motion_ratio > 0.02:
+                contours, _ = cv2.findContours(diff_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                self.blob_count = sum(
+                    1 for c in contours if cv2.contourArea(c) > 120
+                )
+
             # 3. Average Brightness
             avg_brightness = float(np.mean(gray)) / 255.0
+
+            # 3b. Time of day
+            self.time_of_day = self._time_of_day()
 
             # 4. Person presence tracking (stable across frames)
             now = time.time()
@@ -173,6 +207,22 @@ class AashuEyes(threading.Thread):
                 elif avg_brightness < 0.25:
                     attributes["camera"] = ["dark"]
 
+                if self.motion_direction != "none":
+                    attributes["motion"] = [self.motion_direction]
+                if self.blob_count > 0:
+                    attributes["blobs"] = [str(self.blob_count)]
+
+                self.last_report = {
+                    "objects": list(objects),
+                    "attributes": {k: list(v) for k, v in attributes.items()},
+                    "relations": list(relations),
+                    "motion_level": float(motion_ratio),
+                    "motion_direction": self.motion_direction,
+                    "blob_count": self.blob_count,
+                    "brightness": round(avg_brightness, 2),
+                    "time_of_day": self.time_of_day,
+                }
+
                 # Build a learning-worthy scene summary for the vision learning hook
                 summary_parts = []
                 if present:
@@ -183,10 +233,15 @@ class AashuEyes(threading.Thread):
                     summary_parts.append("an unknown face")
                 if motion_ratio > 0.05:
                     summary_parts.append(f"notable motion (level {motion_ratio:.2f})")
+                    if self.motion_direction != "none":
+                        summary_parts.append(f"moving {self.motion_direction}")
+                    if self.blob_count > 0:
+                        summary_parts.append(f"{self.blob_count} moving object(s)")
                 if "bright" in attributes.get("camera", []):
                     summary_parts.append("a bright environment")
                 elif "dark" in attributes.get("camera", []):
                     summary_parts.append("a dark environment")
+                summary_parts.append(f"it is {self.time_of_day}")
                 if summary_parts:
                     self.scene_summary = "Seen in the environment: " + ", ".join(summary_parts) + "."
 
@@ -215,6 +270,18 @@ class AashuEyes(threading.Thread):
     def stop(self):
         self.running = False
 
+    @staticmethod
+    def _time_of_day():
+        from datetime import datetime
+        hour = datetime.now().hour
+        if hour < 6:
+            return "night"
+        if hour < 12:
+            return "morning"
+        if hour < 18:
+            return "afternoon"
+        return "evening"
+
     def recently_seen_users(self, within_seconds=30):
         """Names of recognized users seen recently (within the window)."""
         now = time.time()
@@ -223,4 +290,15 @@ class AashuEyes(threading.Thread):
             for name, seen_at in self.present_users.items()
             if now - seen_at <= within_seconds
         ]
+
+    def last_visual_report(self):
+        """Compact snapshot of the latest visual state, for the agent."""
+        return {
+            "scene_summary": self.scene_summary,
+            "present_users": list(self.present_users.keys()),
+            "motion_direction": self.motion_direction,
+            "moving_objects": self.blob_count,
+            "time_of_day": self.time_of_day,
+            "last_report": dict(self.last_report),
+        }
 

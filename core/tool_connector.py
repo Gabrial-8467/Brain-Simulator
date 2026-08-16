@@ -63,27 +63,58 @@ class ToolConnector:
 
     def _extract_args(self, tool, match, cleaned_text) -> Dict[str, Any]:
         args = {}
-        param_names = list(tool["parameters"].get("properties", {}).keys())
+        properties = tool["parameters"].get("properties", {})
+        param_names = list(properties.keys())
 
-        groups = match.groups()
+        # Named groups map directly to parameters by group name.
+        named = match.groupdict() if match is not None else {}
+        if any(v is not None for v in named.values()):
+            for key, val in named.items():
+                if val is not None:
+                    args[key] = self._cast_arg(key, val, properties.get(key, {}))
+            return self._fill_required(args, tool, cleaned_text)
+
+        groups = match.groups() if match is not None else ()
         if groups:
             # Map regex capture groups to tool parameters in order
             for idx, val in enumerate(groups):
+                if val is None:
+                    continue
                 if idx < len(param_names):
-                    args[param_names[idx]] = val.strip()
+                    args[param_names[idx]] = self._cast_arg(param_names[idx], val.strip(), properties.get(param_names[idx], {}))
                 else:
                     args[f"arg_{idx}"] = val.strip()
         else:
             # Fallback: if match exists but no groups, put cleaned_text in first param
             if param_names:
-                args[param_names[0]] = cleaned_text
+                args[param_names[0]] = self._cast_arg(param_names[0], cleaned_text, properties.get(param_names[0], {}))
 
+        return self._fill_required(args, tool, cleaned_text)
+
+    @staticmethod
+    def _fill_required(args, tool, cleaned_text):
         # Validate required parameters are present (fallback to whole cleaned_text if missing)
         required = tool["parameters"].get("required", [])
         for req in required:
             if req not in args:
                 args[req] = cleaned_text
         return args
+
+    @staticmethod
+    def _cast_arg(name: str, value: str, prop: Dict[str, Any]) -> Any:
+        """Cast captured strings to typed values when the parameter expects a number."""
+        value = value.strip()
+        if not value.isdigit():
+            return value
+        desc = str(prop.get("description", "")).lower()
+        name_hint = name.lower()
+        numeric_hint = any(h in desc or h in name_hint for h in (
+            "second", "minute", "hour", "amount", "percentage", "percent",
+            "number", "count", "quantity", "index", "id",
+        ))
+        if numeric_hint and prop.get("type") == "integer":
+            return int(value)
+        return value
 
     def resolve(self, text: str, min_confidence: float = 0.2) -> Optional[Dict[str, Any]]:
         """Best-match tool resolution.
@@ -110,8 +141,11 @@ class ToolConnector:
                 if match:
                     pattern_hits += 1
                     matched = True
-                    matched_span = max(matched_span, match.end() - match.start())
-                    matched_args = self._extract_args(tool, match, cleaned_text)
+                    span = match.end() - match.start()
+                    # The most specific (longest) matching pattern owns the args.
+                    if span >= matched_span:
+                        matched_span = span
+                        matched_args = self._extract_args(tool, match, cleaned_text)
 
             if matched:
                 confidence = 1.0

@@ -1,0 +1,6 @@
+body { margin: 0; font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+       background: #f4f4f9; color: #22223b; }
+header { background: #6c63ff; color: #fff; padding: 1rem 2rem; }
+nav a { color: #fff; margin-right: 1rem; text-decoration: none; }
+main { padding: 2rem; max-width: 800px; margin: auto; }
+footer { text-align: center; padding: 1.5rem; color: #888; }

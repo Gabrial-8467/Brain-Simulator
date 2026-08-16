@@ -243,16 +243,16 @@ class AashuActuators:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "seconds": {"type": "string", "description": "Countdown duration in seconds"},
+                        "seconds": {"type": "integer", "description": "Countdown duration in seconds"},
                         "label": {"type": "string", "description": "Label or purpose of the timer alert"}
                     },
                     "required": ["seconds", "label"]
                 },
                 "patterns": [
-                    r"set a timer for (\d+) seconds to ([\w\s\-\.\?\!\(\)]+)",
-                    r"set a timer for (\d+) (?:seconds|minutes|hours)",
-                    r"timer for (\d+) (?:seconds|minutes|hours)",
-                    r"remind me in (\d+) (?:seconds|minutes|hours)"
+                    r"set a timer for (?P<seconds>\d+) seconds to (?P<label>[\w\s\-\.\?\!\(\)]+)",
+                    r"set a timer for (?P<seconds>\d+) (?P<unit>seconds|minutes|hours)",
+                    r"timer for (?P<seconds>\d+) (?P<unit>seconds|minutes|hours)",
+                    r"remind me in (?P<seconds>\d+) (?P<unit>seconds|minutes|hours)"
                 ]
             },
             {
@@ -872,6 +872,80 @@ class AashuActuators:
                     r"set up my day",
                     r"break down ([\w\s,\.']+)"
                 ]
+            },
+            {
+                "name": "build_website",
+                "description": "Build a full static website from a name, title and sections",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Project name for the website"},
+                        "title": {"type": "string", "description": "Website title shown on the page"},
+                        "sections": {"type": "string", "description": "Semicolon-separated section names, e.g. 'Home;About;Contact'"},
+                        "theme": {"type": "string", "description": "Theme: light or dark"}
+                    },
+                    "required": ["name"]
+                },
+                "patterns": [
+                    r"build (?:a |an )?website called ([\w\s]+)",
+                    r"make (?:a |an )?website for ([\w\s]+)",
+                    r"create (?:a |an )?website (?:for|called) ([\w\s]+)"
+                ]
+            },
+            {
+                "name": "build_webapp",
+                "description": "Build a full runnable web application (Flask) with pages and features",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Project name for the web app"},
+                        "app_name": {"type": "string", "description": "Module name for the Flask app"},
+                        "features": {"type": "string", "description": "Semicolon-separated feature list, e.g. 'auth;dashboard'"},
+                        "pages": {"type": "string", "description": "Semicolon-separated page list, e.g. 'Home;Settings'"}
+                    },
+                    "required": ["name"]
+                },
+                "patterns": [
+                    r"build (?:a |an )?web ?app called ([\w\s]+)",
+                    r"build (?:a |an )?web ?app (?:for|called) ([\w\s]+)",
+                    r"make (?:a |an )?web ?app (?:for|called) ([\w\s]+)"
+                ]
+            },
+            {
+                "name": "build_reactapp",
+                "description": "Build a full React (Vite) web application with pages and features",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Project name for the React app"},
+                        "app_name": {"type": "string", "description": "App title"},
+                        "features": {"type": "string", "description": "Semicolon-separated feature list, e.g. 'auth;dashboard'"},
+                        "pages": {"type": "string", "description": "Semicolon-separated page list, e.g. 'Home;Settings'"}
+                    },
+                    "required": ["name"]
+                },
+                "patterns": [
+                    r"build (?:a |an )?react ?app (?:called|for|named) ([\w\s]+)",
+                    r"build (?:a |an )?app with react (?:called|for|named) ([\w\s]+)",
+                    r"make (?:a |an )?react ?app (?:called|for) ([\w\s]+)"
+                ]
+            },
+            {
+                "name": "build_cli",
+                "description": "Build a command-line tool (Python) for a given task",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Tool name"},
+                        "task": {"type": "string", "description": "What the tool should do"},
+                        "args": {"type": "string", "description": "Semicolon-separated CLI option names"}
+                    },
+                    "required": ["name"]
+                },
+                "patterns": [
+                    r"build (?:a |an )?cli (?:tool )?(?:called |for )?([\w\s]+)",
+                    r"make (?:a |an )?command-line tool (?:called |for )?([\w\s]+)"
+                ]
             }
         ]
 
@@ -904,7 +978,7 @@ class AashuActuators:
         elif name == "send_notification":
             return self._send_notification(args.get("title", "Aashu Alert"), args.get("message", "Notification Triggered"))
         elif name == "set_timer":
-            return self._set_timer(args.get("seconds", "60"), args.get("label", "Timer Alert"))
+            return self._set_timer(args.get("seconds", "60"), args.get("label", "Timer Alert"), args.get("unit", "seconds"))
         elif name == "learn_face":
             return self._learn_face(args.get("name", "User"))
         elif name == "add_note":
@@ -987,6 +1061,14 @@ class AashuActuators:
             return self._who_am_i(args.get("context", ""))
         elif name == "execute_task":
             return self._execute_task(args.get("goal", ""))
+        elif name == "build_website":
+            return self._build_website(args.get("name", ""), args.get("title"), args.get("sections"), args.get("theme", "light"))
+        elif name == "build_webapp":
+            return self._build_webapp(args.get("name", ""), args.get("app_name"), args.get("features"), args.get("pages"))
+        elif name == "build_reactapp":
+            return self._build_reactapp(args.get("name", ""), args.get("app_name"), args.get("features"), args.get("pages"))
+        elif name == "build_cli":
+            return self._build_cli(args.get("name", ""), args.get("task"), args.get("args"))
         return f"Error: Tool '{name}' is not registered."
 
     def _calculate(self, equation):
@@ -1186,11 +1268,15 @@ class AashuActuators:
         except Exception as e:
             return f"Notification Error: {e}"
 
-    def _set_timer(self, seconds, label):
+    def _set_timer(self, seconds, label, unit="seconds"):
         try:
             sec_val = int(seconds)
         except ValueError:
             return "Error: Duration must be an integer number of seconds."
+        if unit and unit.lower().startswith("minute"):
+            sec_val *= 60
+        elif unit and unit.lower().startswith("hour"):
+            sec_val *= 3600
             
         def timer_thread():
             time.sleep(sec_val)
@@ -1927,7 +2013,7 @@ class AashuActuators:
 
         if not filename:
             slug = re.sub(r"[^a-zA-Z0-9_]+", "_", task.strip().lower())[:30].strip("_")
-            ext = "js" if lang in ("javascript", "typescript", "node") else ("sh" if lang in ("bash", "shell") else "py")
+            ext = "js" if lang in ("javascript", "node", "nodejs", "express", "fastify", "nestjs") else ("jsx" if lang in ("reactjs", "nextjs", "vuejs") else ("ts" if lang in ("typescript", "angular") else ("sh" if lang in ("bash", "shell") else "py")))
             filename = f"{slug or 'aashu_code'}.{ext}"
 
         write_result = self._create_file(filename, code)
@@ -2006,4 +2092,52 @@ class AashuActuators:
         planner = PlanExecutor(self, brain_client=self.brain_client)
         report = planner.execute(goal)
         return planner.format_report(report)
+
+    def _build_website(self, name, title=None, sections=None, theme="light"):
+        if not (name or "").strip():
+            return "Error: No website name provided."
+        if self.mouth:
+            self.mouth.speak(f"Building website {name}.")
+        if self.brain_client is None:
+            return "Error: Brain offline, cannot build websites. Start the brain server first."
+        res = self.brain_client.build_website(name=name, title=title, sections=sections, theme=theme)
+        if res.get("status") == "success":
+            return res.get("message", "Website built.")
+        return res.get("message", "Error: Could not build website.")
+
+    def _build_webapp(self, name, app_name=None, features=None, pages=None):
+        if not (name or "").strip():
+            return "Error: No web app name provided."
+        if self.mouth:
+            self.mouth.speak(f"Building web app {name}.")
+        if self.brain_client is None:
+            return "Error: Brain offline, cannot build web apps. Start the brain server first."
+        res = self.brain_client.build_webapp(name=name, app_name=app_name, features=features, pages=pages)
+        if res.get("status") == "success":
+            return res.get("message", "Web app built.")
+        return res.get("message", "Error: Could not build web app.")
+
+    def _build_reactapp(self, name, app_name=None, features=None, pages=None):
+        if not (name or "").strip():
+            return "Error: No React app name provided."
+        if self.mouth:
+            self.mouth.speak(f"Building React web app {name}.")
+        if self.brain_client is None:
+            return "Error: Brain offline, cannot build React apps. Start the brain server first."
+        res = self.brain_client.build_reactapp(name=name, app_name=app_name, features=features, pages=pages)
+        if res.get("status") == "success":
+            return res.get("message", "React app built.")
+        return res.get("message", "Error: Could not build React app.")
+
+    def _build_cli(self, name, task=None, args=None):
+        if not (name or "").strip():
+            return "Error: No tool name provided."
+        if self.mouth:
+            self.mouth.speak(f"Building command-line tool {name}.")
+        if self.brain_client is None:
+            return "Error: Brain offline, cannot build CLI tools. Start the brain server first."
+        res = self.brain_client.build_cli(name=name, task=task, args=args)
+        if res.get("status") == "success":
+            return res.get("message", "CLI tool built.")
+        return res.get("message", "Error: Could not build CLI tool.")
 
