@@ -1032,6 +1032,25 @@ class AashuActuators:
                 ]
             },
             {
+                "name": "generate_code",
+                "description": "Generate custom code in any supported programming language using grammar-aware composition. Works for Python, JavaScript, TypeScript, React, Angular, Next.js, HTML, CSS, Go, Rust, C, C++, C#, Java, Ruby, R, SQL, MongoDB, and more.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "task": {"type": "string", "description": "What the code should do (e.g. 'Create a REST API', 'Hello world', 'Sort a list')"},
+                        "language": {"type": "string", "description": "Target language (python, javascript, go, rust, java, c++, c#, ruby, r, html, css, sql, react, angular, nextjs, typescript, mongodb, etc.)"}
+                    },
+                    "required": ["task", "language"]
+                },
+                "patterns": [
+                    r"write (?:me )?(?:some )?(?:a )?code (?:in |for )?(?P<language>[\w#+]+) (?:for|that|to) (?P<task>.+)",
+                    r"generate (?:me )?(?:some )?(?:a )?(?P<language>[\w#+]+) code (?:for|that|to) (?P<task>.+)",
+                    r"write (?:a |an )?(?P<language>[\w#+]+) (?:program|script|function|app) (?:for|that|to) (?P<task>.+)",
+                    r"code (?:a |an )?(?P<language>[\w#+]+) (?:for|to) (?P<task>.+)",
+                    r"create (?:a )?(?P<language>[\w#+]+) (?:program|script|app) (?:for|that|to) (?P<task>.+)",
+                ]
+            },
+            {
                 "name": "debug_app",
                 "description": "Deterministically hunt for bugs in a generated app (missing tables, syntax errors, broken routes, template tokens) and optionally fix them in place",
                 "parameters": {
@@ -1198,6 +1217,8 @@ class AashuActuators:
             return self._build_fullstack(args.get("name", ""), args.get("kind", "food_delivery"),
                                          args.get("backend", "flask"), args.get("frontend", "single"),
                                          args.get("theme", "light"))
+        elif name == "generate_code":
+            return self._generate_code(args.get("task", ""), args.get("language", "python"))
         elif name == "debug_app":
             return self._debug_app(args.get("name", ""), args.get("fix", False))
         elif name == "build_cli":
@@ -2425,4 +2446,19 @@ class AashuActuators:
             lines.append("  App looks clean: schema, routes, syntax and bootstrap all consistent.")
         lines.append("Status: " + ("OK" if report.get("ok", False) else "bugs remain (see report)."))
         return "\n".join(lines)
+
+    def _generate_code(self, task, language="python"):
+        task = (task or "").strip()
+        language = (language or "python").strip()
+        if not task:
+            return "Error: No task specified for code generation."
+        if self.mouth:
+            self.mouth.speak(f"Generating {language} code for: {task}")
+        if self.brain_client is None:
+            return "Error: Brain offline, cannot generate code. Start the brain server first."
+        res = self.brain_client.generate_code(task=task, language=language)
+        if res.get("ok"):
+            code = res.get("code", "")
+            return f"Generated {language} code:\n\n{code}"
+        return res.get("error", f"Error: Could not generate {language} code.")
 

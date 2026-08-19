@@ -2156,6 +2156,19 @@ class VirtualBrain:
         """Brain-owned code generation, available only for learned languages."""
         return self.language_cortex.generate_code(task, language)
 
+    @property
+    def code_engine(self):
+        """Direct access to the CodeEngine for grammar-aware code generation."""
+        return self.language_cortex.code_engine
+
+    def generate_custom_code(self, task, language):
+        """Generate code using the CodeEngine directly (no learning gate).
+
+        Unlike generate_code(), this works for any supported language
+        regardless of whether the brain has learned it yet.
+        """
+        return self.code_engine.generate(task, language)
+
     def remember_user(self, fact, fact_type="general", importance=0.6):
         """Store a durable fact about the user in long-term memory."""
         item = self.user_memory.remember(fact, fact_type=fact_type, importance=importance)

@@ -426,6 +426,15 @@ def post_brain_generate_code(req: GenerateCodeRequest):
         return {"status": "success", "code": result}
     return {"status": "not_learned", "message": result}
 
+@app.post("/brain/generate_custom_code")
+def post_brain_generate_custom_code(req: GenerateCodeRequest):
+    if not brain:
+        raise HTTPException(status_code=500, detail="Brain not initialized")
+    ok, result = brain.generate_custom_code(req.task, req.language)
+    if ok:
+        return {"status": "success", "code": result}
+    return {"status": "error", "message": result}
+
 @app.post("/brain/resolve")
 def post_brain_resolve(req: ResolveActionRequest):
     if not brain:

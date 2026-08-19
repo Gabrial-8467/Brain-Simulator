@@ -3610,7 +3610,7 @@ class AppBuilder:
   <script>
     function greet() {{
       document.getElementById('hello').textContent =
-        'Hello from {title}! This site was built from the brain's learned html knowledge.';
+        'Hello from {title}! This site was built from brain learned html knowledge.';
     }}
   </script>
 </body>

@@ -1,6 +1,9 @@
 import re
 from collections import Counter
 
+from cognition.language_grammar import LANGUAGES as GRAMMAR_LANGUAGES, get_language as get_grammar_language
+from cognition.code_engine import CodeEngine
+
 LANGUAGE_ALIASES = {
     "py": "python", "python3": "python", "python2": "python",
     "js": "javascript", "javascripts": "javascript", "node.js": "nodejs",
@@ -325,10 +328,14 @@ class LanguageCortex:
     Tracks which programming languages the brain has learned (from learning
     experiences ingested through perception), can summarize text, and can only
     generate code for languages it has actually learned.
+
+    Uses the CodeEngine for grammar-aware code composition, falling back
+    to static templates for unsupported or unrecognized languages.
     """
 
     def __init__(self):
         self.languages = {}
+        self.code_engine = CodeEngine()
 
     def knows(self, language):
         return normalize_language(language) in self.languages
@@ -380,12 +387,46 @@ class LanguageCortex:
         return " ".join(ordered) if ordered else sentences[0][:400]
 
     def generate_code(self, task, language):
-        """Generate code ONLY for a language the brain has learned."""
+        """Generate code ONLY for a language the brain has learned.
+
+        Uses the CodeEngine for grammar-aware composition when the language
+        is supported, otherwise falls back to static templates.
+        """
         lang = normalize_language(language)
         if not self.knows(lang):
             return False, f"I have not learned {language} yet. Ask me to learn it from the internet first."
+
+        grammar_lang = self._grammar_name(lang)
+        if grammar_lang:
+            ok, code = self.code_engine.generate(task, grammar_lang)
+            if ok:
+                ref = _reference_comments(self.languages.get(lang, {}).get("snippets", []))
+                return True, ref + code
+
         code = self._build_code(task, lang)
         return True, code
+
+    def _grammar_name(self, cortex_lang: str) -> str | None:
+        """Map a cortex language name to a grammar language name."""
+        mapping = {
+            "python": "python", "javascript": "javascript", "typescript": "typescript",
+            "reactjs": "react", "angular": "angular", "nextjs": "nextjs",
+            "nodejs": "javascript", "html": "html", "css": "css",
+            "go": "go", "rust": "rust", "c": "c", "c++": "c++", "c#": "c#",
+            "java": "java", "ruby": "ruby", "r": "r",
+            "mongodb": "mongodb", "nosql": "mongodb",
+            "sql": "sql", "mysql": "sql", "postgresql": "sql", "sqlite": "sql",
+            "shell": None, "bash": None, "php": None, "swift": None, "kotlin": None,
+            "lua": None, "dart": None, "scala": None, "perl": None, "haskell": None,
+            "elixir": None, "cobol": None, "matlab": None,
+            "django": "python", "flask": "python", "fastapi": "python",
+            "express": "javascript", "fastify": "javascript", "nestjs": "javascript",
+            "vuejs": None, "svelte": None, "electron": None,
+            "pandas": "python", "numpy": "python", "matplotlib": "python",
+            "requests": "python", "beautifulsoup": "python", "selenium": "python",
+            "scikit-learn": "python", "tensorflow": "python", "pytorch": "python",
+        }
+        return mapping.get(cortex_lang)
 
     def _build_code(self, task, lang):
         intent = _detect_intent(task)

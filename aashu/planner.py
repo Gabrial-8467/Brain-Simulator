@@ -73,6 +73,23 @@ class PlanExecutor:
                      "arguments": {"name": app_name, "fix": wants_fix},
                      "description": f"{'Fix' if wants_fix else 'Debug'} the {app_name} app"}]
 
+        # ---- Code generation (grammar-aware) ----
+        code_patterns = [
+            (r"write (?:me )?(?:some )?(?:a )?code (?:in |for )?(\w[\w#+]*) (?:for|that|to) (.+)", 1, 2),
+            (r"generate (?:me )?(?:some )?(?:a )?(\w[\w#+]*) code (?:for|that|to) (.+)", 1, 2),
+            (r"write (?:a |an )?(\w[\w#+]*) (?:program|script|function|app) (?:for|that|to) (.+)", 1, 2),
+            (r"code (?:a |an )?(\w[\w#+]*) (?:for|to) (.+)", 1, 2),
+            (r"create (?:a )?(\w[\w#+]*) (?:program|script|app) (?:for|that|to) (.+)", 1, 2),
+        ]
+        for pat, lang_grp, task_grp in code_patterns:
+            m = re.search(pat, goal, re.IGNORECASE)
+            if m:
+                lang = m.group(lang_grp).strip().lower()
+                task = m.group(task_grp).strip()
+                return [{"name": "generate_code",
+                         "arguments": {"task": task, "language": lang},
+                         "description": f"Generate {lang} code: {task}"}]
+
         # ---- Vertical full-stack apps (food delivery, ecommerce, tracker, chat, ...) ----
         fullstack_kinds = {
             "food_delivery": ["food delivery", "zomato", "swiggy", "restaurant ordering", "delivery app", "like zomato"],
