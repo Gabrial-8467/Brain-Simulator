@@ -25,12 +25,12 @@ class AashuActuators:
         self.mouth = mouth
         self.eyes = eyes
         self.brain_client = brain_client
-        self.cal_path = "aashu_calendar.json"
+        self.cal_path = "calendar.json"
         self.music_process = None
         self.alarm_time = None
         self.learning = None
         self.codegen = AashuCodeGenerator()
-        self.notes = KnowledgeStore(path="aashu_notes_db", collection="aashu_notes")
+        self.notes = KnowledgeStore(path="notes_db", collection="aashu_notes")
 
         self._init_calendar()
 
@@ -2041,7 +2041,7 @@ class AashuActuators:
 
     def _run_tests(self):
         try:
-            res = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "aashu"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10.0)
+            res = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "chatbot"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10.0)
             out = res.stdout.strip()
             err = res.stderr.strip()
             summary = f"Test discover results:\n{out if out else err}"

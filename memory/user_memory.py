@@ -22,7 +22,7 @@ class UserMemory:
     def __init__(self, path=None, user_name=None):
         if path is None:
             base = os.getenv("AASHU_MEMORY_DIR", ".")
-            path = os.path.join(base, "aashu_user_db")
+            path = os.path.join(base, "user_db")
         self.path = path
         self.user_name = user_name
         self._store = None

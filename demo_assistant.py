@@ -22,8 +22,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.brain import VirtualBrain
 from decision.decision_engine import DecisionEngine
-from aashu.actuators import AashuActuators
-from aashu.planner import PlanExecutor
+from chatbot.actuators import AashuActuators
+from chatbot.planner import PlanExecutor
 
 
 def _load_yaml(path):

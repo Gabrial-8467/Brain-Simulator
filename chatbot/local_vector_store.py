@@ -10,7 +10,7 @@ import numpy as np
 import chromadb
 from chromadb.api.types import EmbeddingFunction
 
-KNOWLEDGE_STORE_PATH = "aashu_knowledge_db"
+KNOWLEDGE_STORE_PATH = "knowledge_db"
 KNOWLEDGE_COLLECTION = "aashu_knowledge"
 EMBEDDING_DIM = 384
 COSINE_THRESHOLD = 0.15
