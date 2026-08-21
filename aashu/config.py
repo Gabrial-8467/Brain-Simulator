@@ -3,7 +3,7 @@ import os
 BRAIN_API_URL = "http://127.0.0.1:8000"
 BRAIN_API_KEY = os.environ.get("BRAIN_API_KEY", "")
 OLLAMA_API_URL = "http://127.0.0.1:11434"
-OLLAMA_MODEL = "llama3"  # Default local LLM model name
+OLLAMA_MODEL = "gpt-oss:20b-cloud"  # Local LLM model name
 
 # Voice Settings
 WAKE_WORD = "aashu"

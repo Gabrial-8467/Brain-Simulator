@@ -13,7 +13,7 @@ The following diagram illustrates how sensory signals, neurochemical homeostasis
 ```mermaid
 graph TD
     %% Sensory Inputs
-    subgraph Aashu Sensors (Client)
+    subgraph sensors ["Aashu Sensors (Client)"]
         V[AashuEyes OpenCV] -->|/perceive/visual| PE[Perception Parser]
         H[AashuEars Mic] -->|/perceive/hearing| PE
         HW[HardwareMonitor CPU/Bat] -->|/perceive raw| PE
@@ -21,7 +21,7 @@ graph TD
     end
 
     %% Core Processing (Virtual Brain Server)
-    subgraph Neurochemical Homeostasis
+    subgraph homeostasis ["Neurochemical Homeostasis"]
         PE -->|Trigger Signal| CD[Chemical Dynamics]
         CD -->|1. Matrix Interactions| I[Interactions]
         CD -->|2. Homeostatic Pull| HP[Homeostasis]
@@ -29,7 +29,7 @@ graph TD
         HP & I & N -->|4. Value Clamping| CL[Clamped States]
     end
 
-    subgraph Cognition & Worldview
+    subgraph cognition ["Cognition & Worldview"]
         CL -->|State Log| BE[Belief Engine]
         BE -->|Mood Valence & Arousal| ME[Mood State]
         BE -->|Stat-Based Rules| AB[Active Beliefs]
@@ -38,7 +38,7 @@ graph TD
     end
 
     %% Attention Loop
-    subgraph Global Workspace
+    subgraph workspace ["Global Workspace"]
         PE -->|Candidate Thoughts| GW[Global Workspace]
         BE -->|Memory Recalls| GW
         DEV -->|Reflection Proposals| GW
@@ -46,7 +46,7 @@ graph TD
     end
 
     %% Action Loop
-    subgraph Decision & Planning
+    subgraph planning ["Decision & Planning"]
         FT -->|Attention Gate| DE[Decision Engine]
         DE -->|Mood & Belief Modulation| P[Action Probabilities]
         P -->|Deep Copy State| SP[Strategic Planner]
@@ -54,14 +54,14 @@ graph TD
     end
 
     %% Aashu Command Execution
-    subgraph Aashu Actuators (Client)
+    subgraph actuators ["Aashu Actuators (Client)"]
         TC -->|API Response: tool_call| AX[AashuActuators]
         AX -->|execute_tool| OUT[Physical Action / OS cmd]
         OUT -->|/perceive raw: tool_result| PE
     end
 
     %% Feedback & Reflection (Server)
-    subgraph Reflection & Adaptation
+    subgraph reflection ["Reflection & Adaptation"]
         TC -->|Strategic Chosen Action| REF[Self-Reflection]
         REF -->|Regret Calculation| CO[Competence & Wisdom Updates]
         REF -->|Propose Reflection Thought| GW

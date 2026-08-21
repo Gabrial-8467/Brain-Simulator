@@ -123,10 +123,30 @@ class VectorStore:
 
     def __init__(self, path=None, embedding_function=None, collection=KNOWLEDGE_COLLECTION):
         self.path = path or KNOWLEDGE_STORE_PATH
+        self._collection_name = collection
         self.embedding_function = embedding_function or HashedEmbeddingFunction()
         self._client = chromadb.PersistentClient(path=self.path)
         self._collection = self._client.get_or_create_collection(
             collection,
+            embedding_function=self.embedding_function,
+            metadata={"hnsw:space": "cosine"},
+        )
+
+    def _reset(self):
+        """Delete and recreate the collection when the DB is corrupted."""
+        import shutil
+        name = self._collection_name
+        try:
+            self._client.delete_collection(name)
+        except Exception:
+            pass
+        try:
+            shutil.rmtree(self.path, ignore_errors=True)
+        except Exception:
+            pass
+        self._client = chromadb.PersistentClient(path=self.path)
+        self._collection = self._client.get_or_create_collection(
+            name,
             embedding_function=self.embedding_function,
             metadata={"hnsw:space": "cosine"},
         )
@@ -195,8 +215,12 @@ class VectorStore:
 
     @property
     def items(self):
-        result = self._collection.get()
-        return self._result_items(result["ids"], result["metadatas"], result["documents"])
+        try:
+            result = self._collection.get()
+            return self._result_items(result["ids"], result["metadatas"], result["documents"])
+        except Exception:
+            self._reset()
+            return []
 
     def search(self, query, limit=5):
         if not query:
