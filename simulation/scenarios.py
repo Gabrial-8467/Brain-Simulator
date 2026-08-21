@@ -19,8 +19,8 @@ def build_structured_learning_scenario(total_steps=200):
                 "tags": ["social", "positive"]
             }
 
-        # Every 25 steps → Criticism
-        if step % 25 == 0 and step != 0:
+        # Every 25 steps → Criticism (takes precedence when both schedules collide)
+        elif step % 25 == 0 and step != 0:
             event = {
                 "effects": {
                     "cortisol": 10,

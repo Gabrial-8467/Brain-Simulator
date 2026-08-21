@@ -199,11 +199,17 @@ class UserMemory:
         if not isinstance(state, dict):
             return
         self.set_user_name(state.get("user_name"))
+        # Idempotent restore: the store already persists on disk, so skip
+        # facts that exist instead of re-adding them with duplicate IDs.
+        known_ids = {f.get("id") for f in self.store.items}
         for fact in state.get("facts", []) or []:
             if not isinstance(fact, dict) or not fact.get("content"):
                 continue
+            fact_id = fact.get("id") or uuid.uuid4().hex[:12]
+            if fact_id in known_ids:
+                continue
             self.store.store({
-                "id": fact.get("id") or uuid.uuid4().hex[:12],
+                "id": fact_id,
                 "content": fact["content"],
                 "fact_type": fact.get("fact_type", "general"),
                 "importance": fact.get("importance", 0.6),

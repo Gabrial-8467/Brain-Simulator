@@ -527,6 +527,7 @@ class VirtualBrain:
             network_mode=self.network_mode,
             love_score=self.love_score,
             loved_source=self.loved_source,
+            deterministic=self.deterministic,
         )
 
         # Match tool connector against current focus

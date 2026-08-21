@@ -48,8 +48,9 @@ def generate_spontaneous(brain) -> None:
         return
 
     dopamine = brain.chemicals.get("dopamine", {}).get("value", 0) / 100.0
-    # Higher dopamine increases spontaneous mind-wandering probability
-    if random.random() > (0.4 + 0.4 * dopamine):
+    # Higher dopamine increases spontaneous mind-wandering probability;
+    # deterministic brains skip the stochastic gate entirely.
+    if not getattr(brain, "deterministic", False) and random.random() > (0.4 + 0.4 * dopamine):
         return
 
     # Build current state vector

@@ -1,5 +1,6 @@
 import argparse
 import os
+import random
 import sys
 import yaml
 
@@ -75,6 +76,11 @@ def load_brain_config():
 
 def main():
     args = parse_arguments()
+
+    # Seed the global RNG before any brain construction so --deterministic
+    # runs are fully reproducible (matches tests/conftest.py seed).
+    if args.deterministic:
+        random.seed(42)
 
     logger = BrainLogger()
     logger.info("Starting Virtual Brain...")

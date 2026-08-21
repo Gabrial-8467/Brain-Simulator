@@ -2,6 +2,7 @@ import os
 import sys
 import argparse
 import copy
+import random
 import yaml
 from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Depends, Security
@@ -166,7 +167,12 @@ class ResetRequest(BaseModel):
 
 def init_brain(deterministic: bool = False):
     global brain, memory_manager
-    
+
+    # Seed the global RNG before brain construction so deterministic servers
+    # are reproducible across restarts (matches main.py / tests seed).
+    if deterministic:
+        random.seed(42)
+
     # 1. Configs
     try:
         with open("config/chemicals.yaml", "r") as f:

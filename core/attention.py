@@ -91,7 +91,7 @@ class GlobalWorkspace:
         age = now - thought.recency
         return max(0.0, 1.0 - (age / 30.0))
 
-    def _select(self, norepinephrine: float = 50.0, network_mode: str = "TPN", curiosity_engine: Any = None, active_goal: str | None = None, love_score: float = 0.0, loved_source: str | None = None) -> Thought | None:
+    def _select(self, norepinephrine: float = 50.0, network_mode: str = "TPN", curiosity_engine: Any = None, active_goal: str | None = None, love_score: float = 0.0, loved_source: str | None = None, deterministic: bool = False) -> Thought | None:
         if not self._candidates:
             winner = self._last_winner
         else:
@@ -142,7 +142,7 @@ class GlobalWorkspace:
             import random
             # High norepinephrine causes distractibility (reset/decay streak)
             distraction_chance = max(0.0, (norepinephrine - 70.0) / 60.0)
-            if random.random() < distraction_chance:
+            if not deterministic and random.random() < distraction_chance:
                 self._streak = max(0, self._streak - 2)
             else:
                 self._streak += 1

@@ -133,17 +133,33 @@ class VectorStore:
         )
 
     def _reset(self):
-        """Delete and recreate the collection when the DB is corrupted."""
+        """Recover an unreadable collection without destroying unrelated data.
+
+        Tier 1 recreates only the affected collection inside the existing
+        store, which covers transient read errors and index corruption.
+        The directory-level wipe is a last resort for an unusable underlying
+        database, never a first response to a failed read."""
         import shutil
         name = self._collection_name
+        try:
+            try:
+                self._client.delete_collection(name)
+            except Exception:
+                pass
+            self._collection = self._client.get_or_create_collection(
+                name,
+                embedding_function=self.embedding_function,
+                metadata={"hnsw:space": "cosine"},
+            )
+            return
+        except Exception:
+            pass
+        # Last resort: the underlying database itself is unusable; rebuild it.
         try:
             self._client.delete_collection(name)
         except Exception:
             pass
-        try:
-            shutil.rmtree(self.path, ignore_errors=True)
-        except Exception:
-            pass
+        shutil.rmtree(self.path, ignore_errors=True)
         self._client = chromadb.PersistentClient(path=self.path)
         self._collection = self._client.get_or_create_collection(
             name,

@@ -1,11 +1,13 @@
 import json
 import os
+import threading
 
 
 class MemoryStorage:
     def __init__(self, file_path="memory_store.json"):
         self.file_path = file_path
         self.memories = []
+        self._save_lock = threading.Lock()
 
         self._load()
 
@@ -21,11 +23,16 @@ class MemoryStorage:
             self.memories = []
 
     def save(self):
-        directory = os.path.dirname(self.file_path)
-        if directory:
-            os.makedirs(directory, exist_ok=True)
-        with open(self.file_path, "w") as f:
-            json.dump(self.memories, f, indent=4)
+        # Atomic write: serialize overlapping saves, dump to a temp file, then
+        # os.replace() so readers never observe a partially-written checkpoint.
+        with self._save_lock:
+            directory = os.path.dirname(self.file_path)
+            if directory:
+                os.makedirs(directory, exist_ok=True)
+            tmp_path = f"{self.file_path}.tmp"
+            with open(tmp_path, "w") as f:
+                json.dump(self.memories, f, indent=4)
+            os.replace(tmp_path, self.file_path)
 
     def add(self, memory_dict: dict):
         self.memories.append(memory_dict)
