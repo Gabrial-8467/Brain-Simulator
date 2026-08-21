@@ -86,7 +86,7 @@ class SyntheticEnvironment:
                 "speaker_type": "teacher",
                 "sentiment": 0.7,
                 "keywords": ["praise", "effort"],
-                "weight": 0.13,
+                "weight": 0.12,
             },
             {
                 "transcript": "No one is listening",

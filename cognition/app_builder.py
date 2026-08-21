@@ -4132,15 +4132,16 @@ app.listen(PORT, () => console.log(`{name} listening on :${{PORT}}`));
         frontend: react (Vite SPA, built and served by the backend) | single (one HTML file)
 
         Persistence: SQLite (zero config) by default; PostgreSQL automatically
-        when DATABASE_URL is set. Gated on learned Python."""
-        ok, lang, err = self._gate("python")
-        if not ok:
-            return False, err
+        when DATABASE_URL is set. Gated on learned Python for flask/django
+        backends and learned Node.js for express/fastify backends."""
         kind_key = _normalize_kind(kind)
         if kind_key is None:
             return False, (f"Unknown app kind '{kind}'. Available kinds: "
                            f"{', '.join(sorted(FULLSTACK_KINDS))}.")
         backend_key = _normalize_backend(backend)
+        ok, lang, err = self._gate("nodejs" if backend_key in {"express", "fastify"} else "python")
+        if not ok:
+            return False, err
         frontend_key = _normalize_frontend(frontend)
         spec = FULLSTACK_KINDS[kind_key]
         name = _sanitize(name, "My App")

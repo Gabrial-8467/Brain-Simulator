@@ -129,7 +129,7 @@ class DecisionEngine:
             base["refuse"] = base.get("refuse", 0.0) - 0.3 * love_score
 
         # Acute Adrenaline (Epinephrine) flight-or-fight override
-        adrenaline_level = chemical_state.get("adrenaline", 10.0) / 100.0
+        adrenaline_level = chemical_state.get("adrenaline", 0.0) / 100.0
         if adrenaline_level > 0.45:
             base["refuse"] = base.get("refuse", 0.0) + 0.6 * adrenaline_level
             base["challenge"] = base.get("challenge", 0.0) + 0.4 * adrenaline_level

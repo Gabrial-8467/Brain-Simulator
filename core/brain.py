@@ -277,7 +277,10 @@ class VirtualBrain:
         self.love_score = 0.0
         self.loved_source = None
         self.decision_engine = decision_engine
-        self.global_workspace = global_workspace or GlobalWorkspace.get_default()
+        # Each brain owns its workspace: a shared process-wide default would
+        # leak candidate thoughts between brain instances (breaking
+        # deterministic reproducibility whenever more than one brain exists).
+        self.global_workspace = global_workspace or GlobalWorkspace()
 
         self.identity = DynamicIdentity()
         self.development = DynamicDevelopment()
@@ -309,8 +312,10 @@ class VirtualBrain:
             or "memory_events.json"
         )
         self.memory_manager = MemoryManager(storage_path=self.memory_storage_path)
-        # Ensure persistence file exists from startup.
-        self.memory_manager.storage.save()
+        # Ensure the persistence file exists on first startup without
+        # rewriting (and re-serializing) a large legacy checkpoint every boot.
+        if not os.path.exists(self.memory_storage_path):
+            self.memory_manager.storage.save()
 
         memory_dir = os.path.dirname(os.path.abspath(self.memory_storage_path)) or "."
         self.user_memory = UserMemory(path=os.path.join(memory_dir, "brain_user_db"))
@@ -525,6 +530,7 @@ class VirtualBrain:
         self.current_focus = self.global_workspace.select(
             norepinephrine=ne_val,
             network_mode=self.network_mode,
+            curiosity_engine=self.curiosity_engine,
             love_score=self.love_score,
             loved_source=self.loved_source,
             deterministic=self.deterministic,

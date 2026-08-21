@@ -33,10 +33,7 @@ class AutobiographicalMemory:
         if not self.events:
             return None
         latest = self.events[-1]
-        if not self._is_system_event(latest.get("description", "")):
-            candidates = [ev for ev in reversed(self.events) if not self._is_system_event(ev.get("description", ""))]
-        else:
-            candidates = [ev for ev in reversed(self.events) if not self._is_system_event(ev.get("description", ""))]
+        candidates = [ev for ev in reversed(self.events) if not self._is_system_event(ev.get("description", ""))]
         if candidates:
             recent_candidates = candidates[:120]
             scored = sorted(recent_candidates, key=self._event_salience, reverse=True)
